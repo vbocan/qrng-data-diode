@@ -1,0 +1,38 @@
+# Entropy Gateway Configuration Example - Push-Based Mode
+# This component runs in the external network and receives pushed data
+
+# Deployment mode: "push_based" or "direct_access"
+deployment_mode: push_based
+
+# Address and port to bind HTTP server
+listen_address: "0.0.0.0:8080"
+
+# Buffer size in bytes (recommended: 10MB or more)
+buffer_size: 10485760  # 10 MB
+
+# Buffer TTL in seconds (0 = no expiration)
+# Data older than this will be automatically evicted
+buffer_ttl_secs: 3600  # 1 hour
+
+# Valid API keys for client authentication
+# Generate secure keys with: openssl rand -base64 32
+api_keys:
+  - "your-api-key-1"
+  - "your-api-key-2"
+  - "your-api-key-3"
+
+# Rate limit: maximum requests per second per API key
+rate_limit_per_second: 100
+
+# HMAC-SHA256 secret key for verifying pushed packets (hex-encoded)
+# MUST match the collector's key
+hmac_secret_key: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+
+# Direct mode configuration (unused in push_based mode)
+direct_mode: null
+
+# Enable Model Context Protocol server for AI agent integration
+mcp_enabled: true
+
+# Enable Prometheus metrics endpoint (/metrics)
+metrics_enabled: true
