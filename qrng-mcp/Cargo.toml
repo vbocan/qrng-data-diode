@@ -10,3 +10,6 @@ qrng-core = { path = "../qrng-core" }
 serde = { workspace = true }
 serde_json = { workspace = true }
 anyhow = { workspace = true }
+uuid = { workspace = true }
+
+[dev-dependencies]
