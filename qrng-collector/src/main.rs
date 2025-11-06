@@ -45,13 +45,17 @@ use tracing::{error, info, warn};
 #[command(name = "qrng-collector")]
 #[command(about = "QRNG Collector - Fetches and pushes quantum random data", long_about = None)]
 struct Args {
-    /// Path to configuration file
+    /// Path to configuration file (ignored if --env-mode is set)
     #[arg(short, long, default_value = "config/collector.yaml")]
     config: PathBuf,
 
     /// Log level (trace, debug, info, warn, error)
     #[arg(short, long, default_value = "info")]
     log_level: String,
+
+    /// Load configuration from environment variables instead of file
+    #[arg(long, default_value = "false")]
+    env_mode: bool,
 }
 
 /// Main collector application state
@@ -283,13 +287,18 @@ async fn main() -> Result<()> {
         .json()
         .init();
 
-    info!("Entropy Collector v{}", env!("CARGO_PKG_VERSION"));
+    info!("QRNG Collector v{}", env!("CARGO_PKG_VERSION"));
 
     // Load configuration
-    let config = CollectorConfig::from_file(&args.config)
-        .context("Failed to load configuration")?;
-
-    info!("Configuration loaded from {:?}", args.config);
+    let config = if args.env_mode {
+        info!("Loading configuration from environment variables");
+        CollectorConfig::from_env()
+            .context("Failed to load configuration from environment")?
+    } else {
+        info!("Loading configuration from file: {:?}", args.config);
+        CollectorConfig::from_file(&args.config)
+            .context("Failed to load configuration from file")?
+    };
 
     // Create and run collector
     let collector = Arc::new(Collector::new(config)?);
