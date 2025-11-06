@@ -12,12 +12,12 @@ This phase establishes the project structure and defines common components that 
     *   A monorepo using a Cargo workspace is recommended to manage the two components and shared code.
     *   **`qrng-data-diode/`**
         *   **`Cargo.toml`** (Workspace definition)
-        *   **`ec/`**: Crate for the Entropy Collector binary (internal pusher).
-        *   **`eg/`**: Crate for the Entropy Gateway binary (external receiver/server).
-        *   **`common/`**: Crate for shared logic (data structures, configuration models, fetching logic).
-        *   **`mcp-server/`**: Optional crate for Model Context Protocol server implementation.
+        *   **`entropy-collector/`**: Crate for the Entropy Collector binary (internal pusher).
+        *   **`entropy-gateway/`**: Crate for the Entropy Gateway binary (external receiver/server).
+        *   **`qrng-core/`**: Crate for shared logic (data structures, configuration models, fetching logic).
+        *   **`qrng-mcp/`**: Optional crate for Model Context Protocol server implementation.
 
-*   **Step 1.2: Define Shared Data Structures (in `common` crate)**
+*   **Step 1.2: Define Shared Data Structures (in `qrng-core` crate)**
     *   Define a `struct` for the data packets pushed from EC to EG. This will include:
         *   `data: Vec<u8>` (random entropy payload)
         *   `timestamp: u64` (Unix timestamp for freshness tracking)
@@ -27,7 +27,7 @@ This phase establishes the project structure and defines common components that 
     *   Use `serde` with MessagePack for efficient binary serialization (preferred over JSON for performance).
     *   Define health/status structures for `/api/status` endpoint responses.
 
-*   **Step 1.3: Configuration Management (in `common` crate)**
+*   **Step 1.3: Configuration Management (in `qrng-core` crate)**
     *   Define `structs` to represent the configuration from a YAML file (Requirement NFR-10).
     *   **`ECConfig`**: 
         *   `appliance_url` (target QRNG appliance endpoint)
@@ -51,11 +51,11 @@ This phase establishes the project structure and defines common components that 
         *   `metrics_enabled` (expose Prometheus metrics - FR-14)
     *   Implement configuration validation with helpful error messages (NFR-10).
 
-*   **Step 1.4: Implement Shared Fetching Logic (in `common` crate)**
+*   **Step 1.4: Implement Shared Fetching Logic (in `qrng-core` crate)**
     *   Create a reusable module for HTTPS GET requests to Quantis appliance (FR-1).
     *   Use `reqwest` with TLS verification and connection pooling.
     *   Implement exponential backoff retry logic with jitter (FR-9).
-    *   This module will be used by both EC (always) and EG (direct mode only).
+    *   This module will be used by both Entropy Collector (always) and Entropy Gateway (direct mode only).
 
 ---
 
@@ -64,7 +64,7 @@ This phase establishes the project structure and defines common components that 
 This phase focuses on the internal component responsible for fetching and pushing data in push-based deployment mode.
 
 *   **Step 2.1: Implement the Data Fetching Module**
-    *   Use `tokio` for the async runtime and leverage the shared fetching module from `common` crate (FR-1).
+    *   Use `tokio` for the async runtime and leverage the shared fetching module from `qrng-core` crate (FR-1).
     *   Create a loop (`tokio::time::interval`) that periodically fetches data based on configuration.
     *   Handle rate limiting from appliance gracefully with adaptive backoff (FR-9).
     *   Validate received data integrity (check for non-zero entropy, proper length).
@@ -79,7 +79,7 @@ This phase focuses on the internal component responsible for fetching and pushin
     *   Create a second `tokio::time::interval` loop that periodically triggers a push (FR-3).
     *   This function will:
         1.  Extract a batch of data from the accumulator (configurable batch size).
-        2.  Create a data packet with monotonically increasing sequence number (as defined in `common`).
+        2.  Create a data packet with monotonically increasing sequence number (as defined in `qrng-core`).
         3.  Sign the packet using HMAC-SHA256 with the shared secret (FR-7, SEC-1).
         4.  Optionally compute CRC32 checksum for additional integrity (FR-4).
         5.  Serialize packet using MessagePack for efficient transmission.
@@ -121,8 +121,8 @@ This phase focuses on the external component that serves data to clients, suppor
     *   In `main.rs`, conditionally initialize based on `deployment_mode` configuration (FR-0.11).
     *   For direct access mode:
         *   Skip push endpoint initialization.
-        *   Start a fetching loop using the shared fetching module from `common` crate.
-        *   Directly populate the EG buffer with fetched data (FR-0.6 to FR-0.10).
+        *   Start a fetching loop using the shared fetching module from `qrng-core` crate.
+        *   Directly populate the Entropy Gateway buffer with fetched data (FR-0.6 to FR-0.10).
         *   Reuse all buffering, API, and security logic from push-based mode.
     *   Ensure zero-cost abstraction: mode selection happens at startup without runtime overhead.
 
@@ -135,6 +135,7 @@ This phase focuses on the external component that serves data to clients, suppor
     *   Use lock-free data structures or efficient read-write locks to minimize contention.
     *   Implement watermark monitoring: low (< 10%), medium (10-80%), high (> 80%), critical (> 95%).
     *   Add buffer compaction/defragmentation to prevent memory fragmentation.
+    *   Consider implementing this as a reusable module in `qrng-core` for potential use in both components.
 
 *   **Step 3.4: Implement the Public REST API**
     *   **`GET /api/random`** (FR-5):
@@ -188,7 +189,7 @@ This phase focuses on the external component that serves data to clients, suppor
 This final phase adds the innovative extensions and ensures the project is robust and usable.
 
 *   **Step 4.1: Integrate the Model Context Protocol (MCP) Server**
-    *   Add the `mcp-server-rs` crate or implement the protocol manually following the specification (FR-10, FR-11, FR-12).
+    *   Implement in the `qrng-mcp` crate or add directly to `entropy-gateway` (FR-10, FR-11, FR-12).
     *   Expose MCP tools that draw from the same entropy buffer:
         *   **`get_random_bytes`**: Returns N bytes (hex/base64 encoded).
         *   **`get_random_integers`**: Returns array of random integers in specified range.
@@ -242,7 +243,7 @@ This final phase adds the innovative extensions and ensures the project is robus
         *   Mock external dependencies (appliance, network).
         *   Aim for 90%+ code coverage target.
     *   **Integration Tests**:
-        *   Spin up mock EC and EG in test environment.
+        *   Spin up mock Entropy Collector and Entropy Gateway in test environment.
         *   Test full data pipeline: fetch → accumulate → push → verify → serve.
         *   Simulate network failures and verify retry/recovery logic.
         *   Test both push-based and direct access modes.
@@ -268,20 +269,20 @@ This final phase adds the innovative extensions and ensures the project is robus
     *   **Core Documentation**:
         *   Create detailed `README.md` with architecture diagrams (NFR-9).
         *   Document both deployment modes with clear decision matrix.
-        *   Provide step-by-step setup guides for EC and EG.
+        *   Provide step-by-step setup guides for Entropy Collector and Entropy Gateway.
         *   Include API reference with OpenAPI/Swagger specs.
         *   Add MCP server usage guide with AI agent examples.
         *   Create troubleshooting guide for common issues.
     *   **Configuration Examples**:
         *   Provide example `config.yaml` files for:
-            *   Push-based mode (EC + EG)
-            *   Direct access mode (EG only)
+            *   Push-based mode (Entropy Collector + Entropy Gateway)
+            *   Direct access mode (Entropy Gateway only)
             *   High-security configurations
             *   High-throughput configurations
         *   Document all configuration parameters with defaults.
         *   Add validation checklist for production deployments.
     *   **Containerization** (NFR-14):
-        *   Write optimized `Dockerfile`s for both EC and EG.
+        *   Write optimized `Dockerfile`s for both Entropy Collector and Entropy Gateway.
         *   Use multi-stage builds for minimal image size.
         *   Provide `docker-compose.yml` for easy local testing.
         *   Add Kubernetes manifests (Deployment, Service, ConfigMap).
@@ -308,13 +309,13 @@ This final phase adds the innovative extensions and ensures the project is robus
     *   Benchmark against performance targets (NFR-2, NFR-3).
 
 *   **Step 5.2: Operational Tooling**
-    *   Create CLI utility for administrative tasks:
+    *   Create CLI utility for administrative tasks (potentially in `qrng-cli` crate):
         *   Buffer inspection and diagnostics
         *   Configuration validation
         *   Health check testing
         *   Log analysis helpers
     *   Add systemd service files for Linux deployments.
-    *   Provide Windows Service wrapper for EC.
+    *   Provide Windows Service wrapper for Entropy Collector.
 
 *   **Step 5.3: Future Research Directions**
     *   Investigate blockchain integration for entropy provenance.
@@ -327,8 +328,8 @@ This final phase adds the innovative extensions and ensures the project is robus
 ### Development Workflow Recommendations
 
 1.  **Start with Phase 1**: Establish solid foundations with shared modules and clear interfaces.
-2.  **Develop EC first** (Phase 2): Easier to test in isolation with mock EG endpoint.
-3.  **Implement EG core** (Phase 3): Start with push-based mode, then add direct access.
+2.  **Develop Entropy Collector first** (Phase 2): Easier to test in isolation with mock Entropy Gateway endpoint.
+3.  **Implement Entropy Gateway core** (Phase 3): Start with push-based mode, then add direct access.
 4.  **Iterate on features** (Phase 4): Add MCP, monitoring, and tests incrementally.
 5.  **Continuous testing**: Run tests after each phase; maintain high coverage.
 6.  **Documentation as you go**: Update docs with each feature addition.
@@ -344,7 +345,7 @@ This final phase adds the innovative extensions and ensures the project is robus
 *   **Logging**: `tracing`, `tracing-subscriber`
 *   **Metrics**: `prometheus`, `metrics`
 *   **Testing**: `tokio-test`, `proptest`, `mockito`
-*   **MCP**: `mcp-server-rs` or custom implementation
+*   **MCP**: Custom implementation in `qrng-mcp` crate
 
 ### Success Criteria
 
