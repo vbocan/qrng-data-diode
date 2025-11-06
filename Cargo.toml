@@ -2,8 +2,8 @@
 resolver = "2"
 members = [
     "qrng-core",
-    "entropy-collector",
-    "entropy-gateway",
+    "qrng-collector",
+    "qrng-gateway",
     "qrng-mcp",
 ]
 

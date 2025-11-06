@@ -42,8 +42,8 @@ use tokio::time::interval;
 use tracing::{error, info, warn};
 
 #[derive(Parser, Debug)]
-#[command(name = "entropy-collector")]
-#[command(about = "QRNG Entropy Collector - Fetches and pushes quantum random data", long_about = None)]
+#[command(name = "qrng-collector")]
+#[command(about = "QRNG Collector - Fetches and pushes quantum random data", long_about = None)]
 struct Args {
     /// Path to configuration file
     #[arg(short, long, default_value = "config/collector.yaml")]

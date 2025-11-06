@@ -37,8 +37,8 @@ use tower_http::cors::CorsLayer;
 use tracing::{error, info, warn};
 
 #[derive(Parser, Debug)]
-#[command(name = "entropy-gateway")]
-#[command(about = "QRNG Entropy Gateway - Serves quantum random data via REST API", long_about = None)]
+#[command(name = "qrng-gateway")]
+#[command(about = "QRNG Gateway - Serves quantum random data via REST API", long_about = None)]
 struct Args {
     /// Path to configuration file
     #[arg(short, long, default_value = "config/gateway-push.yaml")]

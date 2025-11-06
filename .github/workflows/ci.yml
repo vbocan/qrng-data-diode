@@ -110,8 +110,8 @@ jobs:
         run: |
           cargo build --release --workspace
           mkdir -p release
-          cp target/release/entropy-collector release/
-          cp target/release/entropy-gateway release/
+          cp target/release/qrng-collector release/
+          cp target/release/qrng-gateway release/
           cp -r config release/
           cp README.md release/
           cp LICENSE release/
@@ -127,17 +127,17 @@ jobs:
           files: qrng-data-diode-linux-x64.tar.gz
           body: |
             ## QRNG Data Diode Release
-            
+
             ### Components
-            - Entropy Collector
-            - Entropy Gateway (REST API + MCP Server)
+            - QRNG Collector
+            - QRNG Gateway (REST API + MCP Server)
             - Configuration examples
-            
+
             ### Installation
             ```bash
             tar -xzf qrng-data-diode-linux-x64.tar.gz
             cd qrng-data-diode
-            ./entropy-gateway --help
+            ./qrng-gateway --help
             ```
             
             See [USAGE_GUIDE.md](docs/USAGE_GUIDE.md) for complete documentation.

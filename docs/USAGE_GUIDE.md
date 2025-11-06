@@ -13,14 +13,14 @@ All components have been fully implemented and tested. The system is **productio
 - Production-grade metrics and monitoring
 - Type-safe configuration management
 
-### 2. Entropy Collector (`entropy-collector`) - 288 lines
+### 2. QRNG Collector (`qrng-collector`) - 288 lines
 - Dual-loop architecture (fetch + push)
 - Graceful shutdown with buffer flushing
 - Cross-platform signal handling
 - Structured JSON logging
 - Lock-free sequence generation
 
-### 3. Entropy Gateway (`entropy-gateway`) - 460 lines ✨ NEW
+### 3. QRNG Gateway (`qrng-gateway`) - 460 lines ✨ NEW
 - **Complete REST API** with 5 endpoints
 - **Two deployment modes**: push-based and direct access
 - **Token-bucket rate limiting** per API key
@@ -60,17 +60,17 @@ cargo clippy --workspace -- -D warnings
 
 ```bash
 # Terminal 1: Start Gateway (external network)
-./target/release/entropy-gateway --config config/gateway-push.yaml
+./target/release/qrng-gateway --config config/gateway-push.yaml
 
 # Terminal 2: Start Collector (internal network)
-./target/release/entropy-collector --config config/collector.yaml
+./target/release/qrng-collector --config config/collector.yaml
 ```
 
 #### Option 2: Direct Access Mode
 
 ```bash
 # Single component deployment
-./target/release/entropy-gateway --config config/gateway-direct.yaml
+./target/release/qrng-gateway --config config/gateway-direct.yaml
 ```
 
 ---
@@ -188,7 +188,7 @@ Receive entropy packets (push mode only).
 **Example:**
 
 ```bash
-# Sent by entropy-collector automatically
+# Sent by qrng-collector automatically
 # MessagePack-encoded EntropyPacket
 curl -X POST "http://localhost:8080/push" \
   -H "Content-Type: application/msgpack" \
@@ -409,7 +409,7 @@ Add to `claude_desktop_config.json`:
 {
   "mcpServers": {
     "qrng": {
-      "command": "path/to/entropy-gateway",
+      "command": "path/to/qrng-gateway",
       "args": ["--config", "config/gateway.yaml"]
     }
   }
@@ -590,7 +590,7 @@ cargo test --release
 
 ```bash
 # Start gateway
-./target/release/entropy-gateway --config config/gateway-direct.yaml &
+./target/release/qrng-gateway --config config/gateway-direct.yaml &
 
 # Wait for startup
 sleep 2
@@ -605,7 +605,7 @@ curl "http://localhost:8080/health"
 curl "http://localhost:8080/metrics"
 
 # Cleanup
-pkill entropy-gateway
+pkill qrng-gateway
 ```
 
 ### Load Testing
@@ -632,16 +632,16 @@ hey -n 10000 -c 100 \
 FROM rust:1.75 as builder
 WORKDIR /app
 COPY . .
-RUN cargo build --release --bin entropy-gateway
+RUN cargo build --release --bin qrng-gateway
 
 FROM debian:bookworm-slim
 RUN apt-get update && apt-get install -y \
     ca-certificates \
     && rm -rf /var/lib/apt/lists/*
-COPY --from=builder /app/target/release/entropy-gateway /usr/local/bin/
+COPY --from=builder /app/target/release/qrng-gateway /usr/local/bin/
 COPY config/ /etc/qrng/
 EXPOSE 8080
-CMD ["entropy-gateway", "--config", "/etc/qrng/gateway.yaml"]
+CMD ["qrng-gateway", "--config", "/etc/qrng/gateway.yaml"]
 ```
 
 ### Build and Run
