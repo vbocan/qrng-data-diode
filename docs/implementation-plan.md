@@ -1,6 +1,6 @@
 ### Implementation Plan: QRNG Bridge Service
 
-This plan outlines the development phases for creating the two core Rust components: the Entropy Collector (EC) and the Entropy Gateway (EG). The development is structured to prioritize core functionality and allow for iterative addition of advanced features.
+This plan outlines the development phases for creating the two core Rust components: the Entropy Collector (EC) and the Entropy Gateway (EG). The development is structured to prioritize core functionality and allow for iterative addition of advanced features, supporting both push-based (data diode emulation) and direct access deployment modes.
 
 ---
 
@@ -12,77 +12,174 @@ This phase establishes the project structure and defines common components that 
     *   A monorepo using a Cargo workspace is recommended to manage the two components and shared code.
     *   **`qrng-data-diode/`**
         *   **`Cargo.toml`** (Workspace definition)
-        *   **`ec/`**: Crate for the Entropy Collector binary.
-        *   **`eg/`**: Crate for the Entropy Gateway binary.
-        *   **`common/`**: Crate for shared logic (data structures, configuration models).
+        *   **`ec/`**: Crate for the Entropy Collector binary (internal pusher).
+        *   **`eg/`**: Crate for the Entropy Gateway binary (external receiver/server).
+        *   **`common/`**: Crate for shared logic (data structures, configuration models, fetching logic).
+        *   **`mcp-server/`**: Optional crate for Model Context Protocol server implementation.
 
 *   **Step 1.2: Define Shared Data Structures (in `common` crate)**
     *   Define a `struct` for the data packets pushed from EC to EG. This will include:
-        *   `data: Vec<u8>`
-        *   `timestamp: u64`
-        *   `sequence_number: u64`
-        *   `signature: Vec<u8>` (for HMAC signature)
-    *   Use `serde` for serialization to a format like JSON or MessagePack.
+        *   `data: Vec<u8>` (random entropy payload)
+        *   `timestamp: u64` (Unix timestamp for freshness tracking)
+        *   `sequence_number: u64` (monotonic counter for ordering/gap detection)
+        *   `signature: Vec<u8>` (HMAC-SHA256 signature for integrity verification)
+        *   `checksum: Option<u32>` (CRC32 for additional integrity validation - FR-4)
+    *   Use `serde` with MessagePack for efficient binary serialization (preferred over JSON for performance).
+    *   Define health/status structures for `/api/status` endpoint responses.
 
 *   **Step 1.3: Configuration Management (in `common` crate)**
     *   Define `structs` to represent the configuration from a YAML file (Requirement NFR-10).
-    *   **`ECConfig`**: `appliance_url`, `fetch_chunk_size`, `fetch_interval`, `buffer_size`, `push_url`, `hmac_secret_key`.
-    *   **`EGConfig`**: `listen_address`, `buffer_size`, `api_keys`, `rate_limit`, `deployment_mode` (`Push` or `Direct`), `direct_mode_config`.
+    *   **`ECConfig`**: 
+        *   `appliance_url` (target QRNG appliance endpoint)
+        *   `fetch_chunk_size` (bytes per request, default 1024)
+        *   `fetch_interval` (polling interval in seconds)
+        *   `buffer_size` (max accumulation before push)
+        *   `push_url` (EG endpoint URL)
+        *   `push_interval` (push frequency)
+        *   `hmac_secret_key` (shared secret for signing)
+        *   `retry_policy` (exponential backoff parameters)
+    *   **`EGConfig`**: 
+        *   `deployment_mode` (enum: `PushBased` or `DirectAccess` - FR-0.11)
+        *   `listen_address` (bind address for HTTP server)
+        *   `buffer_size` (max bytes, default 10MB - NFR-1)
+        *   `buffer_ttl` (data freshness threshold - FR-6)
+        *   `api_keys` (list of valid authentication keys)
+        *   `rate_limit` (requests per second per client - FR-8)
+        *   `hmac_secret_key` (for push mode verification)
+        *   `direct_mode_config` (optional, contains appliance connection details)
+        *   `mcp_enabled` (enable MCP server - FR-10)
+        *   `metrics_enabled` (expose Prometheus metrics - FR-14)
+    *   Implement configuration validation with helpful error messages (NFR-10).
+
+*   **Step 1.4: Implement Shared Fetching Logic (in `common` crate)**
+    *   Create a reusable module for HTTPS GET requests to Quantis appliance (FR-1).
+    *   Use `reqwest` with TLS verification and connection pooling.
+    *   Implement exponential backoff retry logic with jitter (FR-9).
+    *   This module will be used by both EC (always) and EG (direct mode only).
 
 ---
 
 ### Phase 2: Entropy Collector (EC) Implementation
 
-This phase focuses on the internal component responsible for fetching and pushing data.
+This phase focuses on the internal component responsible for fetching and pushing data in push-based deployment mode.
 
 *   **Step 2.1: Implement the Data Fetching Module**
-    *   Use `tokio` for the async runtime and `reqwest` to perform HTTPS GET requests to the Quantis appliance (FR-1).
+    *   Use `tokio` for the async runtime and leverage the shared fetching module from `common` crate (FR-1).
     *   Create a loop (`tokio::time::interval`) that periodically fetches data based on configuration.
+    *   Handle rate limiting from appliance gracefully with adaptive backoff (FR-9).
+    *   Validate received data integrity (check for non-zero entropy, proper length).
 
 *   **Step 2.2: Implement Data Accumulation**
-    *   Use a thread-safe, in-memory buffer, such as `tokio::sync::RwLock<Vec<u8>>`, to accumulate the fetched random data (FR-2).
-    *   The buffer size will be configurable.
+    *   Use a thread-safe, lock-free buffer architecture for high throughput (consider `crossbeam` or `tokio::sync::RwLock<VecDeque<u8>>`).
+    *   Implement FIFO (First-In, First-Out) queue with configurable maximum size (FR-2).
+    *   Add buffer monitoring: track fill levels, oldest data timestamp for metrics.
+    *   Implement overflow protection: when buffer reaches capacity, apply backpressure to fetching loop.
 
 *   **Step 2.3: Implement the Unidirectional Pushing Module**
-    *   Create a second `tokio::time::interval` loop that periodically triggers a push.
+    *   Create a second `tokio::time::interval` loop that periodically triggers a push (FR-3).
     *   This function will:
-        1.  Extract a batch of data from the accumulator.
-        2.  Create a data packet (as defined in `common`).
-        3.  Sign the packet using HMAC-SHA256 with a shared secret (FR-7).
-        4.  Send the packet to the EG's push endpoint via an HTTP POST request (FR-3).
+        1.  Extract a batch of data from the accumulator (configurable batch size).
+        2.  Create a data packet with monotonically increasing sequence number (as defined in `common`).
+        3.  Sign the packet using HMAC-SHA256 with the shared secret (FR-7, SEC-1).
+        4.  Optionally compute CRC32 checksum for additional integrity (FR-4).
+        5.  Serialize packet using MessagePack for efficient transmission.
+        6.  Send the packet to the EG's `/push` endpoint via HTTPS POST request.
+    *   Implement fire-and-forget pattern with local queuing for push failures (FR-3, FR-9).
+    *   Track push metrics: success rate, latency, bytes transferred.
 
 *   **Step 2.4: Add Resilience and Logging**
-    *   Implement exponential backoff for both fetching and pushing to handle transient network errors (FR-9).
-    *   Integrate the `tracing` crate for structured JSON logging (NFR-11).
+    *   Implement exponential backoff with jitter for both fetching and pushing to handle transient network errors (FR-9).
+    *   Add circuit breaker pattern: temporarily halt operations if consecutive failures exceed threshold.
+    *   Integrate the `tracing` crate for structured JSON logging with configurable log levels (NFR-11).
+    *   Log critical events: fetch success/failure, buffer states, push operations, configuration loading.
+    *   Implement graceful shutdown: flush pending data on SIGTERM/SIGINT signals (NFR-6).
+
+*   **Step 2.5: Health Monitoring**
+    *   Implement internal health checks: verify appliance connectivity, buffer integrity.
+    *   Optionally expose a local health endpoint for container orchestration (e.g., `/health` on localhost).
+    *   Track uptime, total bytes fetched, total pushes attempted/succeeded.
 
 ---
 
 ### Phase 3: Entropy Gateway (EG) Implementation
 
-This phase focuses on the external component that serves data to clients.
+This phase focuses on the external component that serves data to clients, supporting both push-based and direct access modes.
 
-*   **Step 3.1: Set Up the Web Server and Data Reception**
-    *   Use the `axum` web framework to build the server.
-    *   Create a `/push` endpoint to receive data from the EC. This handler will:
-        1.  Deserialize the incoming data packet.
-        2.  Verify the HMAC signature using the shared secret (FR-4).
-        3.  If valid, append the random data to the EG's internal buffer.
+*   **Step 3.1: Set Up the Web Server and Data Reception (Push-Based Mode)**
+    *   Use the `axum` web framework with `tokio` runtime to build a high-performance async server (NFR-2).
+    *   Create a `POST /push` endpoint to receive data from the EC. This handler will:
+        1.  Deserialize the incoming MessagePack data packet.
+        2.  Verify the HMAC-SHA256 signature using the shared secret (FR-4, SEC-1).
+        3.  Optionally validate CRC32 checksum for additional integrity assurance.
+        4.  Check sequence number for gaps/duplicates and log anomalies (FR-4).
+        5.  If valid, append the random data to the EG's internal buffer with timestamp.
+        6.  Update metrics: last push timestamp, bytes received, sequence tracking.
+        7.  Return appropriate HTTP status codes (200 OK, 401 Unauthorized, 400 Bad Request).
+    *   Implement request size limits and timeout protections (SEC-2, SEC-3).
 
-*   **Step 3.2: Implement Buffer Management**
-    *   Create a large, thread-safe in-memory buffer, similar to the EC's but with a larger capacity (FR-4).
-    *   Implement FIFO (First-In, First-Out) logic with policies for overflow (discard oldest data) and data freshness (discard data older than a configured time) (FR-6).
+*   **Step 3.2: Implement Direct Access Mode**
+    *   In `main.rs`, conditionally initialize based on `deployment_mode` configuration (FR-0.11).
+    *   For direct access mode:
+        *   Skip push endpoint initialization.
+        *   Start a fetching loop using the shared fetching module from `common` crate.
+        *   Directly populate the EG buffer with fetched data (FR-0.6 to FR-0.10).
+        *   Reuse all buffering, API, and security logic from push-based mode.
+    *   Ensure zero-cost abstraction: mode selection happens at startup without runtime overhead.
 
-*   **Step 3.3: Implement the Public REST API**
-    *   **`GET /api/random`**: Serves N bytes from the buffer with configurable encoding (`hex`, `base64`, `binary`) (FR-5).
-    *   **`GET /api/status`**: Returns a JSON object with system health, buffer fill level, and the timestamp of the last received push (FR-5).
+*   **Step 3.3: Implement Advanced Buffer Management**
+    *   Create a thread-safe, high-capacity in-memory buffer (default 10MB, configurable - FR-4, NFR-1).
+    *   Implement sophisticated FIFO with multiple policies (FR-6):
+        *   **Age-based eviction**: Discard data older than configured TTL (e.g., 1 hour).
+        *   **Overflow handling**: When buffer reaches capacity, remove oldest chunk.
+        *   **Freshness guarantee**: Track timestamps and warn if data becomes stale.
+    *   Use lock-free data structures or efficient read-write locks to minimize contention.
+    *   Implement watermark monitoring: low (< 10%), medium (10-80%), high (> 80%), critical (> 95%).
+    *   Add buffer compaction/defragmentation to prevent memory fragmentation.
 
-*   **Step 3.4: Implement Direct Access Mode**
-    *   Create a feature module within the `eg` crate that replicates the EC's fetching logic.
-    *   In `main.rs`, use the `deployment_mode` from the configuration to conditionally start either the push receiver listener or the direct fetching loop (FR-0.11).
+*   **Step 3.4: Implement the Public REST API**
+    *   **`GET /api/random`** (FR-5):
+        *   Query parameters: `bytes` (1-65536), `encoding` (hex/base64/binary).
+        *   Validates requested size against buffer availability and rate limits.
+        *   Extracts N bytes from buffer head (FIFO order).
+        *   Applies requested encoding transformation.
+        *   Returns data with appropriate Content-Type headers.
+        *   Logs request metadata (excluding actual entropy) for audit trails.
+    *   **`GET /api/status`** (FR-5):
+        *   Returns comprehensive JSON object:
+            *   `status`: "healthy" | "degraded" | "unhealthy"
+            *   `deployment_mode`: "push" | "direct"
+            *   `buffer_fill_percent`: current utilization
+            *   `buffer_bytes_available`: actual byte count
+            *   `last_data_received`: timestamp (for push mode) or last fetch (for direct mode)
+            *   `data_freshness_seconds`: age of oldest data in buffer
+            *   `uptime_seconds`: service runtime
+            *   `total_requests_served`: counter
+            *   `total_bytes_served`: counter
+            *   `requests_per_second`: current rate
+        *   Include warnings array if buffer is low, data is stale, or errors detected.
+    *   **`GET /health`** (NFR-7):
+        *   Lightweight endpoint for load balancer/orchestration health checks.
+        *   Returns 200 OK if buffer has minimum data threshold, 503 otherwise.
 
 *   **Step 3.5: Implement Security Features**
-    *   Create an `axum` middleware for API key authentication on all `/api/*` routes (FR-7).
-    *   Implement a rate-limiting middleware (e.g., using a token bucket algorithm) to protect against abuse (FR-8).
+    *   **API Key Authentication** (FR-7, SEC-1):
+        *   Create an `axum` middleware for authentication on all `/api/*` routes.
+        *   Support header-based (`Authorization: Bearer <key>`) and query parameter (`?api_key=<key>`) methods.
+        *   Use constant-time comparison to prevent timing attacks.
+        *   Return 401 Unauthorized with generic error messages to avoid information leakage.
+    *   **Rate Limiting** (FR-8, SEC-2):
+        *   Implement token bucket algorithm with configurable refill rate per API key.
+        *   Track limits per client IP and per API key separately.
+        *   Return 429 Too Many Requests with Retry-After header when limit exceeded.
+        *   Use efficient in-memory store (e.g., `moka` cache with TTL).
+    *   **Request Validation** (SEC-3):
+        *   Validate all query parameters with strict bounds checking.
+        *   Sanitize inputs to prevent injection attacks.
+        *   Set maximum request sizes to prevent resource exhaustion.
+    *   **TLS/HTTPS** (SEC-4):
+        *   Configure `axum` with TLS support using `rustls` or `native-tls`.
+        *   Provide clear documentation for certificate setup.
+        *   Recommend certificate management best practices.
 
 ---
 
@@ -90,21 +187,173 @@ This phase focuses on the external component that serves data to clients.
 
 This final phase adds the innovative extensions and ensures the project is robust and usable.
 
-*   **Step 4.1: Integrate the MCP Server**
-    *   Add the `mcp-server-rs` crate or implement the protocol manually.
-    *   Expose the required tools (`get_random_bytes`, `get_random_integers`, etc.) that draw from the same entropy buffer (FR-11, FR-12).
+*   **Step 4.1: Integrate the Model Context Protocol (MCP) Server**
+    *   Add the `mcp-server-rs` crate or implement the protocol manually following the specification (FR-10, FR-11, FR-12).
+    *   Expose MCP tools that draw from the same entropy buffer:
+        *   **`get_random_bytes`**: Returns N bytes (hex/base64 encoded).
+        *   **`get_random_integers`**: Returns array of random integers in specified range.
+        *   **`get_random_floats`**: Returns array of random floats in [0,1) for Monte Carlo simulations.
+        *   **`get_random_uuid`**: Generates cryptographic-grade UUIDv4.
+        *   **`get_status`**: Returns buffer health and service status.
+    *   Support both stdio and HTTP transports for AI agent integration (FR-10).
+    *   Implement proper tool schemas with parameter validation.
+    *   Add comprehensive tool descriptions and examples for AI agent discovery.
+    *   Test integration with popular AI frameworks (Claude, GPT, local models).
 
-*   **Step 4.2: Implement Innovative Extensions (as optional features)**
-    *   **Entropy Enhancement**: Add optional post-processing functions (e.g., hashing) that can be applied before serving data (FR-11).
-    *   **Monitoring**: Add a `/metrics` endpoint and use the `prometheus` crate to expose metrics for buffer usage, requests, and throughput (FR-14).
-    *   **Monte Carlo Test**: Implement the `POST /api/test/monte-carlo` endpoint to validate randomness quality (UC-1).
+*   **Step 4.2: Implement Innovative Extensions**
+    *   **Optional Entropy Enhancement** (FR-11):
+        *   Add configurable post-processing pipeline (e.g., SHA-256 hashing, XOR whitening).
+        *   Implement as middleware layer that processes data before serving.
+        *   Document trade-offs: processing overhead vs. enhanced uniformity.
+        *   Make enhancement optional and transparent to clients.
+    *   **Monitoring & Metrics** (FR-14, NFR-8):
+        *   Integrate `prometheus` crate and expose `/metrics` endpoint.
+        *   Track key metrics:
+            *   Buffer utilization histogram
+            *   Request rate and latency percentiles (p50, p95, p99)
+            *   Bytes served total and rate
+            *   Error counters by type
+            *   Data freshness gauge
+            *   Push success/failure ratio (for EC)
+        *   Add Grafana dashboard JSON templates in documentation.
+    *   **Monte Carlo Randomness Test** (UC-1, FR-13):
+        *   Implement `POST /api/test/monte-carlo?iterations=N` endpoint.
+        *   Algorithm:
+            1.  Generate N pairs of random floats in [0,1) from buffer.
+            2.  For each (x,y), test if x² + y² ≤ 1 (inside quarter-circle).
+            3.  Estimate π = 4 × (hits / N).
+            4.  Calculate error: |estimated_π - actual_π|.
+            5.  Compare with pseudo-random baseline (Rust's `rand` crate).
+        *   Return JSON response:
+            *   `estimated_pi`: computed value
+            *   `error`: absolute error
+            *   `convergence_rate`: iterations needed for target precision
+            *   `quantum_vs_pseudo`: performance comparison
+            *   `scatter_plot_data`: optional visualization data
+        *   Support configurable iteration counts (default 1M, max 10M).
+        *   Add statistical analysis: confidence intervals, chi-square test.
+        *   Document use case in SoftwareX submission as validation methodology.
 
 *   **Step 4.3: Comprehensive Testing**
-    *   Write unit tests for business logic (e.g., buffer management, signature verification).
-    *   Write integration tests that spin up a mock EC and EG to test the full data pipeline.
-    *   Aim for a high code coverage target (e.g., 90%) as specified in NFR-13.
+    *   **Unit Tests** (NFR-13):
+        *   Test all business logic modules in isolation.
+        *   Focus on: buffer management, signature verification, encoding transformations, rate limiting.
+        *   Use property-based testing (`proptest` crate) for buffer invariants.
+        *   Mock external dependencies (appliance, network).
+        *   Aim for 90%+ code coverage target.
+    *   **Integration Tests**:
+        *   Spin up mock EC and EG in test environment.
+        *   Test full data pipeline: fetch → accumulate → push → verify → serve.
+        *   Simulate network failures and verify retry/recovery logic.
+        *   Test both push-based and direct access modes.
+        *   Validate MCP server integration with mock AI agents.
+    *   **Security Tests** (NFR-13):
+        *   Test authentication bypass attempts.
+        *   Verify rate limiting effectiveness under load.
+        *   Test HMAC signature validation with tampered data.
+        *   Attempt timing attacks on authentication.
+        *   Validate input sanitization against edge cases.
+    *   **Performance Tests** (NFR-2, NFR-3):
+        *   Benchmark throughput under concurrent load (target: 100 req/s).
+        *   Measure latency percentiles (target: < 100ms p99).
+        *   Test buffer performance with various sizes.
+        *   Profile memory usage and identify leaks.
+        *   Stress test: sustained high load for extended periods.
+    *   **Randomness Quality Tests** (NFR-12):
+        *   Run standard statistical test suites (DIEHARDER, NIST STS) on served data.
+        *   Verify entropy distribution, autocorrelation, frequency analysis.
+        *   Document results in project README and SoftwareX paper.
 
 *   **Step 4.4: Finalize Documentation and Deployment**
-    *   Create detailed `README.md` files for both `ec` and `eg`, explaining configuration and setup.
-    *   Provide example `config.yaml` files for both push-based and direct-access modes.
-    *   Write `Dockerfile`s for each component to facilitate containerized deployment (NFR-14).
+    *   **Core Documentation**:
+        *   Create detailed `README.md` with architecture diagrams (NFR-9).
+        *   Document both deployment modes with clear decision matrix.
+        *   Provide step-by-step setup guides for EC and EG.
+        *   Include API reference with OpenAPI/Swagger specs.
+        *   Add MCP server usage guide with AI agent examples.
+        *   Create troubleshooting guide for common issues.
+    *   **Configuration Examples**:
+        *   Provide example `config.yaml` files for:
+            *   Push-based mode (EC + EG)
+            *   Direct access mode (EG only)
+            *   High-security configurations
+            *   High-throughput configurations
+        *   Document all configuration parameters with defaults.
+        *   Add validation checklist for production deployments.
+    *   **Containerization** (NFR-14):
+        *   Write optimized `Dockerfile`s for both EC and EG.
+        *   Use multi-stage builds for minimal image size.
+        *   Provide `docker-compose.yml` for easy local testing.
+        *   Add Kubernetes manifests (Deployment, Service, ConfigMap).
+        *   Document orchestration best practices.
+    *   **Security Hardening Guide**:
+        *   Document TLS/HTTPS setup procedures (SEC-4).
+        *   Provide HMAC secret key generation recommendations.
+        *   Security audit checklist for production.
+        *   Incident response guidelines.
+    *   **SoftwareX Submission Materials**:
+        *   Write comprehensive software paper draft.
+        *   Include benchmark results, validation tests, use cases.
+        *   Prepare code availability statement (open-source, MIT license).
+        *   Create reproducible experiment scripts.
+        *   Document novel contributions: data diode emulation, MCP integration, Monte Carlo validation.
+---
+
+### Phase 5: Additional Considerations and Future Enhancements
+
+*   **Step 5.1: Performance Optimization**
+    *   Profile critical paths using `cargo flamegraph` and optimize hot spots.
+    *   Consider zero-copy techniques for buffer operations.
+    *   Evaluate SIMD optimizations for data processing.
+    *   Benchmark against performance targets (NFR-2, NFR-3).
+
+*   **Step 5.2: Operational Tooling**
+    *   Create CLI utility for administrative tasks:
+        *   Buffer inspection and diagnostics
+        *   Configuration validation
+        *   Health check testing
+        *   Log analysis helpers
+    *   Add systemd service files for Linux deployments.
+    *   Provide Windows Service wrapper for EC.
+
+*   **Step 5.3: Future Research Directions**
+    *   Investigate blockchain integration for entropy provenance.
+    *   Explore federated QRNG networks with multiple appliances.
+    *   Research quantum-inspired algorithms using served entropy.
+    *   Study long-term entropy quality metrics and drift detection.
+
+---
+
+### Development Workflow Recommendations
+
+1.  **Start with Phase 1**: Establish solid foundations with shared modules and clear interfaces.
+2.  **Develop EC first** (Phase 2): Easier to test in isolation with mock EG endpoint.
+3.  **Implement EG core** (Phase 3): Start with push-based mode, then add direct access.
+4.  **Iterate on features** (Phase 4): Add MCP, monitoring, and tests incrementally.
+5.  **Continuous testing**: Run tests after each phase; maintain high coverage.
+6.  **Documentation as you go**: Update docs with each feature addition.
+
+### Key Dependencies
+
+*   **Runtime**: `tokio` (async runtime)
+*   **HTTP Client**: `reqwest` (HTTPS fetching)
+*   **Web Framework**: `axum` (REST API server)
+*   **Serialization**: `serde`, `serde_json`, `rmp-serde` (MessagePack)
+*   **Cryptography**: `hmac`, `sha2`, `crc32fast`
+*   **Configuration**: `serde_yaml`, `config`
+*   **Logging**: `tracing`, `tracing-subscriber`
+*   **Metrics**: `prometheus`, `metrics`
+*   **Testing**: `tokio-test`, `proptest`, `mockito`
+*   **MCP**: `mcp-server-rs` or custom implementation
+
+### Success Criteria
+
+*   ✅ Both deployment modes functional and well-tested
+*   ✅ REST API meets all functional requirements (FR-5)
+*   ✅ MCP server enables AI agent integration (FR-10-12)
+*   ✅ Security features pass penetration testing (SEC-1-4)
+*   ✅ Performance targets achieved (NFR-2, NFR-3)
+*   ✅ Monte Carlo test validates randomness quality (UC-1)
+*   ✅ Documentation complete and clear (NFR-9)
+*   ✅ Code coverage ≥ 90% (NFR-13)
+*   ✅ Ready for open-source release and SoftwareX submission
