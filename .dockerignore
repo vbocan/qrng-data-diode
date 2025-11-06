@@ -1,0 +1,44 @@
+# Git
+.git/
+.github/
+.gitignore
+
+# Build artifacts
+target/
+**/target/
+
+# Documentation
+docs/
+*.md
+!README.md
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Config examples (include actual configs at runtime via volumes)
+config/
+
+# Logs
+*.log
+
+# Temporary files
+tmp/
+temp/
+
+# Test files
+tests/
+**/tests/
+
+# CI files
+.github/
+
+# Claude artifacts
+.claude/
+
+# Other
+Quantis Appliance Manual/
