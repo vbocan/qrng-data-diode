@@ -1,6 +1,6 @@
 //! Retry logic with exponential backoff and jitter
 
-use crate::{Error, Result};
+use crate::Result;
 use std::time::Duration;
 use tokio::time::sleep;
 use tracing::{debug, warn};
@@ -147,25 +147,30 @@ impl CircuitBreaker {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::Error;
 
     #[tokio::test]
     async fn test_retry_success() {
         let policy = RetryPolicy::default();
-        let mut attempts = 0;
+        let counter = std::sync::Arc::new(std::sync::atomic::AtomicU32::new(0));
 
+        let counter_clone = counter.clone();
         let result = policy
-            .execute(|| async {
-                attempts += 1;
-                if attempts < 3 {
-                    Err(Error::Timeout)
-                } else {
-                    Ok(42)
+            .execute(|| {
+                let counter = counter_clone.clone();
+                async move {
+                    let attempts = counter.fetch_add(1, std::sync::atomic::Ordering::SeqCst) + 1;
+                    if attempts < 3 {
+                        Err(Error::Timeout)
+                    } else {
+                        Ok(42)
+                    }
                 }
             })
             .await;
 
         assert_eq!(result.unwrap(), 42);
-        assert_eq!(attempts, 3);
+        assert_eq!(counter.load(std::sync::atomic::Ordering::SeqCst), 3);
     }
 
     #[tokio::test]

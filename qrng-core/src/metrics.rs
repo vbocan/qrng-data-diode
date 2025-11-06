@@ -156,31 +156,31 @@ impl Metrics {
     pub fn prometheus_format(&self) -> String {
         let mut output = String::new();
         
-        output.push_str(&format!("# HELP qrng_requests_total Total number of requests\n"));
-        output.push_str(&format!("# TYPE qrng_requests_total counter\n"));
+        output.push_str("# HELP qrng_requests_total Total number of requests\n");
+        output.push_str("# TYPE qrng_requests_total counter\n");
         output.push_str(&format!("qrng_requests_total {}\n", self.requests_total()));
         
-        output.push_str(&format!("# HELP qrng_requests_failed Total number of failed requests\n"));
-        output.push_str(&format!("# TYPE qrng_requests_failed counter\n"));
+        output.push_str("# HELP qrng_requests_failed Total number of failed requests\n");
+        output.push_str("# TYPE qrng_requests_failed counter\n");
         output.push_str(&format!("qrng_requests_failed {}\n", self.requests_failed()));
         
-        output.push_str(&format!("# HELP qrng_bytes_served Total bytes served\n"));
-        output.push_str(&format!("# TYPE qrng_bytes_served counter\n"));
+        output.push_str("# HELP qrng_bytes_served Total bytes served\n");
+        output.push_str("# TYPE qrng_bytes_served counter\n");
         output.push_str(&format!("qrng_bytes_served {}\n", self.bytes_served()));
         
-        output.push_str(&format!("# HELP qrng_uptime_seconds Service uptime in seconds\n"));
-        output.push_str(&format!("# TYPE qrng_uptime_seconds gauge\n"));
+        output.push_str("# HELP qrng_uptime_seconds Service uptime in seconds\n");
+        output.push_str("# TYPE qrng_uptime_seconds gauge\n");
         output.push_str(&format!("qrng_uptime_seconds {}\n", self.uptime_seconds()));
         
         if let Some(p50) = self.latency_p50() {
-            output.push_str(&format!("# HELP qrng_latency_p50_microseconds Request latency 50th percentile\n"));
-            output.push_str(&format!("# TYPE qrng_latency_p50_microseconds gauge\n"));
+            output.push_str("# HELP qrng_latency_p50_microseconds Request latency 50th percentile\n");
+            output.push_str("# TYPE qrng_latency_p50_microseconds gauge\n");
             output.push_str(&format!("qrng_latency_p50_microseconds {}\n", p50));
         }
         
         if let Some(p99) = self.latency_p99() {
-            output.push_str(&format!("# HELP qrng_latency_p99_microseconds Request latency 99th percentile\n"));
-            output.push_str(&format!("# TYPE qrng_latency_p99_microseconds gauge\n"));
+            output.push_str("# HELP qrng_latency_p99_microseconds Request latency 99th percentile\n");
+            output.push_str("# TYPE qrng_latency_p99_microseconds gauge\n");
             output.push_str(&format!("qrng_latency_p99_microseconds {}\n", p99));
         }
         
@@ -214,9 +214,9 @@ mod tests {
         }
         
         let p50 = metrics.latency_p50().unwrap();
-        assert!(p50 >= 45 && p50 <= 55);
+        assert!((45..=55).contains(&p50));
         
         let p99 = metrics.latency_p99().unwrap();
-        assert!(p99 >= 95 && p99 <= 100);
+        assert!((95..=100).contains(&p99));
     }
 }
