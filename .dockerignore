@@ -1,0 +1,35 @@
+# Build artifacts
+target/
+*.exe
+*.pdb
+
+# Development files
+.git/
+.github/
+.gitignore
+.env
+*.log
+
+# Documentation
+docs/
+*.md
+!README.md
+Quantis Appliance Manual/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Test files
+tests/
+benches/
+
+# CI/CD (include if needed in build)
+# .github/

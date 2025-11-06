@@ -409,27 +409,69 @@ sts -f data.bin
 
 ## 🐳 Docker Deployment
 
-```dockerfile
-# Build stage
-FROM rust:1.75 as builder
-WORKDIR /app
-COPY . .
-RUN cargo build --release
+Complete Docker deployment for both components on **separate machines**. See the [Docker Deployment Guide](docs/DOCKER_DEPLOYMENT.md) for detailed instructions.
 
-# Runtime stage
-FROM debian:bookworm-slim
-RUN apt-get update && apt-get install -y ca-certificates && rm -rf /var/lib/apt/lists/*
-COPY --from=builder /app/target/release/entropy-gateway /usr/local/bin/
-COPY config/ /etc/qrng/
-EXPOSE 8080
-CMD ["entropy-gateway", "--config", "/etc/qrng/gateway.yaml"]
-```
+### Architecture
+
+Each component runs on its own physical machine:
+- **Machine A (Internal)**: `entropy-collector` → connects to QRNG appliance
+- **Machine B (External)**: `entropy-gateway` → serves clients
+- **Data Flow**: One-way push from collector to gateway
+
+### Quick Start
+
+**On Internal Machine (Collector):**
 
 ```bash
 # Build and run
-docker build -t qrng-gateway .
-docker run -p 8080:8080 -v ./config:/etc/qrng qrng-gateway
+docker build -f Dockerfile.collector -t qrng-entropy-collector:latest .
+docker run -d --name entropy-collector \
+  -v ./config/collector.yaml:/etc/qrng/collector.yaml:ro \
+  qrng-entropy-collector:latest
 ```
+
+**On External Machine (Gateway):**
+
+```bash
+# Build and run
+docker build -f Dockerfile.gateway -t qrng-entropy-gateway:latest .
+docker run -d --name entropy-gateway -p 8080:8080 \
+  -v ./config/gateway-push.yaml:/etc/qrng/gateway.yaml:ro \
+  qrng-entropy-gateway:latest --config /etc/qrng/gateway.yaml
+```
+
+### Helper Scripts
+
+```bash
+# PowerShell (Windows)
+.\deploy.ps1 build-collector
+.\deploy.ps1 run-collector
+
+# Bash (Linux/macOS)
+./deploy.sh build-gateway
+./deploy.sh run-gateway
+
+# Makefile
+make build-collector run-collector
+make build-gateway run-gateway
+```
+
+### Available Files
+
+- `Dockerfile.collector` - Multi-stage build for entropy-collector
+- `Dockerfile.gateway` - Multi-stage build for entropy-gateway
+- `deploy.ps1` / `deploy.sh` - Deployment scripts
+- `Makefile` - Build and run commands
+- `.dockerignore` - Build optimization
+
+### Features
+
+- ✅ Multi-stage builds for minimal image size (~50MB)
+- ✅ Non-root user execution (security)
+- ✅ Built-in health checks
+- ✅ Automatic restart policies
+- ✅ Volume mounts for configuration
+- ✅ Production-ready with optimized builds
 
 ## 📚 Publications & Research
 

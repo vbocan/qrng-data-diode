@@ -1,0 +1,65 @@
+# Multi-stage build for entropy-gateway
+# Stage 1: Builder
+FROM rust:1.75-slim as builder
+
+WORKDIR /app
+
+# Install build dependencies
+RUN apt-get update && \
+    apt-get install -y pkg-config libssl-dev && \
+    rm -rf /var/lib/apt/lists/*
+
+# Copy workspace manifests
+COPY Cargo.toml Cargo.lock ./
+COPY qrng-core/Cargo.toml ./qrng-core/
+COPY entropy-collector/Cargo.toml ./entropy-collector/
+COPY entropy-gateway/Cargo.toml ./entropy-gateway/
+COPY qrng-mcp/Cargo.toml ./qrng-mcp/
+
+# Create dummy source files to cache dependencies
+RUN mkdir -p qrng-core/src entropy-collector/src entropy-gateway/src qrng-mcp/src && \
+    echo "fn main() {}" > entropy-collector/src/main.rs && \
+    echo "fn main() {}" > entropy-gateway/src/main.rs && \
+    echo "pub fn dummy() {}" > qrng-core/src/lib.rs && \
+    echo "pub fn dummy() {}" > qrng-mcp/src/lib.rs
+
+# Build dependencies only (cached layer)
+RUN cargo build --release --package entropy-gateway
+
+# Remove dummy source and copy real source
+RUN rm -rf qrng-core/src entropy-collector/src entropy-gateway/src qrng-mcp/src
+COPY qrng-core/src ./qrng-core/src
+COPY entropy-collector/src ./entropy-collector/src
+COPY entropy-gateway/src ./entropy-gateway/src
+COPY qrng-mcp/src ./qrng-mcp/src
+
+# Build the actual binary
+RUN cargo build --release --package entropy-gateway
+
+# Stage 2: Runtime
+FROM debian:bookworm-slim
+
+# Install runtime dependencies
+RUN apt-get update && \
+    apt-get install -y ca-certificates libssl3 && \
+    rm -rf /var/lib/apt/lists/* && \
+    useradd -m -u 1000 -s /bin/bash qrng
+
+# Copy binary from builder
+COPY --from=builder /app/target/release/entropy-gateway /usr/local/bin/
+
+# Create config directory
+RUN mkdir -p /etc/qrng && chown qrng:qrng /etc/qrng
+
+# Switch to non-root user
+USER qrng
+
+# Expose ports
+EXPOSE 8080
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
+    CMD timeout 5s wget --quiet --tries=1 --spider http://localhost:8080/health || exit 1
+
+ENTRYPOINT ["entropy-gateway"]
+CMD ["--config", "/etc/qrng/gateway-push.yaml"]
