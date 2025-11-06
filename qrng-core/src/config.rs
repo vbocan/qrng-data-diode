@@ -1,0 +1,299 @@
+//! Configuration management for QRNG components
+
+use crate::{Error, Result};
+use serde::{Deserialize, Serialize};
+use std::path::Path;
+use std::time::Duration;
+use url::Url;
+
+/// Deployment mode for Entropy Gateway
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum DeploymentMode {
+    /// Push-based mode: receives data from Entropy Collector
+    PushBased,
+    /// Direct access mode: fetches data directly from appliance
+    DirectAccess,
+}
+
+/// Entropy Collector configuration
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct CollectorConfig {
+    /// URL of the QRNG appliance
+    pub appliance_url: String,
+    
+    /// Bytes to fetch per request
+    #[serde(default = "default_chunk_size")]
+    pub fetch_chunk_size: usize,
+    
+    /// Fetch interval in seconds
+    #[serde(default = "default_fetch_interval")]
+    pub fetch_interval_secs: u64,
+    
+    /// Internal buffer size in bytes
+    #[serde(default = "default_buffer_size")]
+    pub buffer_size: usize,
+    
+    /// URL of Entropy Gateway push endpoint
+    pub push_url: String,
+    
+    /// Push interval in seconds
+    #[serde(default = "default_push_interval")]
+    pub push_interval_secs: u64,
+    
+    /// HMAC secret key (hex-encoded)
+    pub hmac_secret_key: String,
+    
+    /// Maximum retry attempts
+    #[serde(default = "default_max_retries")]
+    pub max_retries: u32,
+    
+    /// Initial backoff in milliseconds
+    #[serde(default = "default_initial_backoff_ms")]
+    pub initial_backoff_ms: u64,
+}
+
+impl CollectorConfig {
+    /// Load configuration from YAML file
+    pub fn from_file(path: impl AsRef<Path>) -> Result<Self> {
+        let content = std::fs::read_to_string(path)?;
+        let config: Self = serde_yaml::from_str(&content)
+            .map_err(|e| Error::Config(format!("Failed to parse YAML: {}", e)))?;
+        config.validate()?;
+        Ok(config)
+    }
+
+    /// Validate configuration
+    pub fn validate(&self) -> Result<()> {
+        // Validate URLs
+        Url::parse(&self.appliance_url)
+            .map_err(|e| Error::Config(format!("Invalid appliance_url: {}", e)))?;
+        Url::parse(&self.push_url)
+            .map_err(|e| Error::Config(format!("Invalid push_url: {}", e)))?;
+
+        // Validate sizes
+        if self.fetch_chunk_size == 0 || self.fetch_chunk_size > crate::MAX_REQUEST_SIZE {
+            return Err(Error::Config(format!(
+                "fetch_chunk_size must be between 1 and {}",
+                crate::MAX_REQUEST_SIZE
+            )));
+        }
+
+        if self.buffer_size < self.fetch_chunk_size {
+            return Err(Error::Config(
+                "buffer_size must be >= fetch_chunk_size".to_string()
+            ));
+        }
+
+        // Validate secret key
+        if self.hmac_secret_key.is_empty() {
+            return Err(Error::Config("hmac_secret_key cannot be empty".to_string()));
+        }
+
+        Ok(())
+    }
+
+    pub fn fetch_interval(&self) -> Duration {
+        Duration::from_secs(self.fetch_interval_secs)
+    }
+
+    pub fn push_interval(&self) -> Duration {
+        Duration::from_secs(self.push_interval_secs)
+    }
+}
+
+/// Entropy Gateway configuration
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct GatewayConfig {
+    /// Deployment mode
+    #[serde(default = "default_deployment_mode")]
+    pub deployment_mode: DeploymentMode,
+    
+    /// Bind address for HTTP server
+    #[serde(default = "default_listen_address")]
+    pub listen_address: String,
+    
+    /// Buffer size in bytes
+    #[serde(default = "default_gateway_buffer_size")]
+    pub buffer_size: usize,
+    
+    /// Buffer TTL in seconds (0 = no TTL)
+    #[serde(default)]
+    pub buffer_ttl_secs: u64,
+    
+    /// Valid API keys for authentication
+    pub api_keys: Vec<String>,
+    
+    /// Rate limit: requests per second per key
+    #[serde(default = "default_rate_limit")]
+    pub rate_limit_per_second: u32,
+    
+    /// HMAC secret key for push mode (hex-encoded)
+    #[serde(default)]
+    pub hmac_secret_key: Option<String>,
+    
+    /// Direct mode configuration (only used if deployment_mode = DirectAccess)
+    pub direct_mode: Option<DirectModeConfig>,
+    
+    /// Enable MCP server
+    #[serde(default)]
+    pub mcp_enabled: bool,
+    
+    /// Enable Prometheus metrics
+    #[serde(default = "default_true")]
+    pub metrics_enabled: bool,
+}
+
+/// Direct access mode configuration
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct DirectModeConfig {
+    /// QRNG appliance URL
+    pub appliance_url: String,
+    
+    /// Fetch chunk size
+    #[serde(default = "default_chunk_size")]
+    pub fetch_chunk_size: usize,
+    
+    /// Fetch interval in seconds
+    #[serde(default = "default_fetch_interval")]
+    pub fetch_interval_secs: u64,
+}
+
+impl GatewayConfig {
+    /// Load configuration from YAML file
+    pub fn from_file(path: impl AsRef<Path>) -> Result<Self> {
+        let content = std::fs::read_to_string(path)?;
+        let config: Self = serde_yaml::from_str(&content)
+            .map_err(|e| Error::Config(format!("Failed to parse YAML: {}", e)))?;
+        config.validate()?;
+        Ok(config)
+    }
+
+    /// Validate configuration
+    pub fn validate(&self) -> Result<()> {
+        // Validate buffer size
+        if self.buffer_size == 0 {
+            return Err(Error::Config("buffer_size must be > 0".to_string()));
+        }
+
+        // Validate API keys
+        if self.api_keys.is_empty() {
+            return Err(Error::Config("At least one API key required".to_string()));
+        }
+
+        // Mode-specific validation
+        match self.deployment_mode {
+            DeploymentMode::PushBased => {
+                if self.hmac_secret_key.is_none() {
+                    return Err(Error::Config(
+                        "hmac_secret_key required for push-based mode".to_string()
+                    ));
+                }
+            }
+            DeploymentMode::DirectAccess => {
+                if self.direct_mode.is_none() {
+                    return Err(Error::Config(
+                        "direct_mode config required for direct access mode".to_string()
+                    ));
+                }
+                if let Some(ref dm) = self.direct_mode {
+                    Url::parse(&dm.appliance_url)
+                        .map_err(|e| Error::Config(format!("Invalid appliance_url: {}", e)))?;
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    pub fn buffer_ttl(&self) -> Option<chrono::Duration> {
+        if self.buffer_ttl_secs > 0 {
+            Some(chrono::Duration::seconds(self.buffer_ttl_secs as i64))
+        } else {
+            None
+        }
+    }
+}
+
+// Default value functions
+fn default_chunk_size() -> usize {
+    crate::DEFAULT_CHUNK_SIZE
+}
+
+fn default_buffer_size() -> usize {
+    1024 * 1024 // 1 MB for collector
+}
+
+fn default_gateway_buffer_size() -> usize {
+    crate::DEFAULT_BUFFER_SIZE
+}
+
+fn default_fetch_interval() -> u64 {
+    5
+}
+
+fn default_push_interval() -> u64 {
+    10
+}
+
+fn default_max_retries() -> u32 {
+    5
+}
+
+fn default_initial_backoff_ms() -> u64 {
+    100
+}
+
+fn default_deployment_mode() -> DeploymentMode {
+    DeploymentMode::PushBased
+}
+
+fn default_listen_address() -> String {
+    "0.0.0.0:8080".to_string()
+}
+
+fn default_rate_limit() -> u32 {
+    100
+}
+
+fn default_true() -> bool {
+    true
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_collector_config_validation() {
+        let config = CollectorConfig {
+            appliance_url: "https://example.com/random".to_string(),
+            fetch_chunk_size: 1024,
+            fetch_interval_secs: 5,
+            buffer_size: 10240,
+            push_url: "https://gateway.com/push".to_string(),
+            push_interval_secs: 10,
+            hmac_secret_key: "secret123".to_string(),
+            max_retries: 5,
+            initial_backoff_ms: 100,
+        };
+        assert!(config.validate().is_ok());
+    }
+
+    #[test]
+    fn test_gateway_config_validation() {
+        let config = GatewayConfig {
+            deployment_mode: DeploymentMode::PushBased,
+            listen_address: "0.0.0.0:8080".to_string(),
+            buffer_size: 10240,
+            buffer_ttl_secs: 3600,
+            api_keys: vec!["key1".to_string()],
+            rate_limit_per_second: 100,
+            hmac_secret_key: Some("secret".to_string()),
+            direct_mode: None,
+            mcp_enabled: false,
+            metrics_enabled: true,
+        };
+        assert!(config.validate().is_ok());
+    }
+}
