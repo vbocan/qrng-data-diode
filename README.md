@@ -35,8 +35,8 @@ This system provides secure access to quantum-generated random numbers from a lo
 │           │ fetch       │         │           │ REST API    │
 │           ▼             │         │           │             │
 │  ┌──────────────────┐   │         │  ┌────────┴─────────┐   │
-│  │    Entropy       │   │  HTTPS  │  │    Entropy       │   │
-│  │   Collector      │───┼────────>│──│    Gateway       │   │
+│  │      QRNG        │   │  HTTPS  │  │      QRNG        │   │
+│  │    Collector     │───┼────────>│──│     Gateway      │   │
 │  │                  │   │  push   │  │                  │   │
 │  │  - Fetch loop    │   │  (one-  │  │  - REST API      │   │
 │  │  - Buffer (1MB)  │   │   way)  │  │  - Buffer (10MB) │   │
@@ -60,8 +60,8 @@ This system provides secure access to quantum-generated random numbers from a lo
 │           │ fetch                │
 │           ▼                      │
 │  ┌──────────────────┐            │
-│  │    Entropy       │◄───────────┼──── Clients (REST API)
-│  │    Gateway       │            │
+│  │      QRNG        │◄───────────┼──── Clients (REST API)
+│  │     Gateway      │            │
 │  │                  │            │
 │  │  - Fetch loop    │            │
 │  │  - Buffer (10MB) │            │
@@ -127,18 +127,18 @@ hmac_secret_key: "<same-key-as-collector>"
 #### Push-Based Mode
 
 ```bash
-# Terminal 1: Start Entropy Gateway (external network)
-./target/release/entropy-gateway --config config/gateway-push.yaml
+# Terminal 1: Start QRNG Gateway (external network)
+./target/release/qrng-gateway --config config/gateway-push.yaml
 
-# Terminal 2: Start Entropy Collector (internal network)
-./target/release/entropy-collector --config config/collector.yaml
+# Terminal 2: Start QRNG Collector (internal network)
+./target/release/qrng-collector --config config/collector.yaml
 ```
 
 #### Direct Access Mode
 
 ```bash
 # Single component deployment
-./target/release/entropy-gateway --config config/gateway-direct.yaml
+./target/release/qrng-gateway --config config/gateway-direct.yaml
 ```
 
 ## 📡 API Reference
@@ -278,7 +278,7 @@ Add to `claude_desktop_config.json`:
 {
   "mcpServers": {
     "qrng": {
-      "command": "entropy-gateway",
+      "command": "qrng-gateway",
       "args": ["--mcp-mode", "--config", "config/gateway.yaml"]
     }
   }
@@ -301,13 +301,13 @@ qrng-data-diode/
 │   │   ├── retry.rs        # Exponential backoff logic
 │   │   └── metrics.rs      # Performance metrics
 │   └── Cargo.toml
-├── entropy-collector/      # Internal component
+├── qrng-collector/         # Internal component
 │   ├── src/main.rs
 │   └── Cargo.toml
-├── entropy-gateway/        # External component
+├── qrng-gateway/           # External component
 │   ├── src/main.rs
 │   └── Cargo.toml
-├── qrng-mcp/              # MCP server implementation
+├── qrng-mcp/               # MCP server implementation
 │   ├── src/lib.rs
 │   └── Cargo.toml
 ├── config/                 # Example configurations
@@ -419,10 +419,10 @@ RUN cargo build --release
 # Runtime stage
 FROM debian:bookworm-slim
 RUN apt-get update && apt-get install -y ca-certificates && rm -rf /var/lib/apt/lists/*
-COPY --from=builder /app/target/release/entropy-gateway /usr/local/bin/
+COPY --from=builder /app/target/release/qrng-gateway /usr/local/bin/
 COPY config/ /etc/qrng/
 EXPOSE 8080
-CMD ["entropy-gateway", "--config", "/etc/qrng/gateway.yaml"]
+CMD ["qrng-gateway", "--config", "/etc/qrng/gateway.yaml"]
 ```
 
 ```bash

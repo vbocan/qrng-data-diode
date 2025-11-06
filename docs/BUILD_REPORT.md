@@ -23,8 +23,8 @@
 
 | Binary | Debug | Release | Description |
 |--------|-------|---------|-------------|
-| entropy-collector | ~4.2 MB | ~4.1 MB | Entropy fetcher/pusher |
-| entropy-gateway | ~4.2 MB | 116 KB | REST API server (stub) |
+| qrng-collector | ~4.2 MB | ~4.1 MB | Entropy fetcher/pusher |
+| qrng-gateway | ~4.2 MB | 116 KB | REST API server (stub) |
 
 *Release binaries use LTO (Link-Time Optimization) and symbol stripping*
 
@@ -97,7 +97,7 @@ All clippy lints passed with `-D warnings` (treat warnings as errors):
 
 During build, the following issues were identified and fixed:
 
-1. **Missing crates**: Added `qrng-mcp` and `entropy-gateway` stubs
+1. **Missing crates**: Added `qrng-mcp` and `qrng-gateway` stubs
 2. **Windows compatibility**: Fixed signal handling for Windows
 3. **Missing dependency**: Added `serde_bytes` crate
 4. **Unused imports**: Removed `encode_hex` and `RetryPolicy` from collector
@@ -123,7 +123,7 @@ During build, the following issues were identified and fixed:
 
 ### Binary Analysis
 
-**entropy-collector (Release)**:
+**qrng-collector (Release)**:
 - Size: 4.08 MB
 - Optimization: Level 3 + LTO
 - Symbols: Stripped
@@ -183,13 +183,13 @@ All dependencies are:
 ```
 target/
 ├── debug/
-│   ├── entropy-collector.exe    (4.2 MB with symbols)
-│   ├── entropy-gateway.exe      (4.2 MB with symbols)
-│   └── libqrng_core.rlib        (library archive)
+│   ├── qrng-collector.exe    (4.2 MB with symbols)
+│   ├── qrng-gateway.exe      (4.2 MB with symbols)
+│   └── libqrng_core.rlib     (library archive)
 └── release/
-    ├── entropy-collector.exe    (4.1 MB stripped)
-    ├── entropy-gateway.exe      (116 KB stripped)
-    └── libqrng_core.rlib        (library archive)
+    ├── qrng-collector.exe    (4.1 MB stripped)
+    ├── qrng-gateway.exe      (116 KB stripped)
+    └── libqrng_core.rlib     (library archive)
 ```
 
 ### Build Cache
