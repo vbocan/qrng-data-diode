@@ -2,8 +2,6 @@
 //!
 //! Provides a unified error taxonomy using `thiserror` for ergonomic error handling.
 
-use std::fmt;
-
 pub type Result<T> = std::result::Result<T, Error>;
 
 /// Core error type for QRNG operations

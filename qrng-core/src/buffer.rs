@@ -4,7 +4,7 @@
 //! random entropy with automatic age-based eviction and watermark monitoring.
 
 use crate::{Error, Result};
-use bytes::{Buf, BufMut, Bytes, BytesMut};
+use bytes::{BufMut, Bytes, BytesMut};
 use chrono::{DateTime, Duration, Utc};
 use parking_lot::RwLock;
 use std::collections::VecDeque;
@@ -79,7 +79,7 @@ impl EntropyBuffer {
 
     /// Create buffer with TTL for automatic age-based eviction
     pub fn with_ttl(max_size: usize, ttl: Duration) -> Self {
-        let mut buffer = Self::new(max_size);
+        let buffer = Self::new(max_size);
         buffer.inner.write().ttl = Some(ttl);
         buffer
     }

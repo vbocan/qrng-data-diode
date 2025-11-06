@@ -49,7 +49,7 @@ impl EntropyFetcher {
             .use_rustls_tls()
             .https_only(true)
             .build()
-            .map_err(|e| Error::Network(e))?;
+            .map_err(Error::Network)?;
 
         Ok(Self { client, config })
     }
@@ -84,12 +84,7 @@ impl EntropyFetcher {
             let status = response.status();
             let body = response.text().await.unwrap_or_default();
             warn!("HTTP error {}: {}", status, body);
-            return Err(Error::Network(
-                reqwest::Error::from(std::io::Error::new(
-                    std::io::ErrorKind::Other,
-                    format!("HTTP {}: {}", status, body),
-                ))
-            ));
+            return Err(Error::Validation(format!("HTTP {}: {}", status, body)));
         }
 
         // Read response body

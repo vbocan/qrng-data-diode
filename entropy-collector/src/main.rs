@@ -30,11 +30,10 @@ use clap::Parser;
 use qrng_core::{
     buffer::EntropyBuffer,
     config::CollectorConfig,
-    crypto::{encode_hex, PacketSigner},
+    crypto::PacketSigner,
     fetcher::{EntropyFetcher, FetcherConfig},
     metrics::Metrics,
     protocol::EntropyPacket,
-    retry::RetryPolicy,
 };
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -244,15 +243,26 @@ impl Collector {
 
     /// Wait for shutdown signal (SIGINT or SIGTERM)
     async fn wait_for_shutdown() {
-        use signal_hook::consts::signal::*;
-        use signal_hook_tokio::Signals;
-        use futures::stream::StreamExt;
+        #[cfg(unix)]
+        {
+            use signal_hook::consts::signal::*;
+            use signal_hook_tokio::Signals;
+            use futures::stream::StreamExt;
 
-        let mut signals = Signals::new(&[SIGINT, SIGTERM])
-            .expect("Failed to register signal handlers");
+            let mut signals = Signals::new(&[SIGINT, SIGTERM])
+                .expect("Failed to register signal handlers");
 
-        if let Some(signal) = signals.next().await {
-            info!("Received signal: {:?}", signal);
+            if let Some(signal) = signals.next().await {
+                info!("Received signal: {:?}", signal);
+            }
+        }
+
+        #[cfg(windows)]
+        {
+            tokio::signal::ctrl_c()
+                .await
+                .expect("Failed to listen for Ctrl+C");
+            info!("Received Ctrl+C signal");
         }
     }
 }
