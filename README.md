@@ -5,21 +5,21 @@
 
 A high-performance, secure bridge service that exposes Quantum Random Number Generator (QRNG) entropy to external networks using software-based data diode emulation. Implemented in Rust for maximum safety, performance, and reliability.
 
-## 🎯 Overview
+## Overview
 
 This system provides secure access to quantum-generated random numbers from a locally-networked Quantis QRNG appliance, designed for academic research, cryptographic applications, and scientific computing. It addresses network restrictions through a split architecture that emulates unidirectional data flow, inspired by hardware data diodes.
 
 ### Key Features
 
-- **🔐 Software Data Diode**: Unidirectional entropy flow from internal to external networks
-- **🚀 High Performance**: Lock-free buffers, zero-copy operations, async I/O
-- **🛡️ Cryptographic Integrity**: HMAC-SHA256 signing + CRC32 checksums
-- **📊 Production Ready**: Comprehensive metrics, structured logging, health checks
-- **🤖 AI Integration**: Model Context Protocol (MCP) server for AI agents
-- **🧪 Quality Validation**: Built-in Monte Carlo π estimation for randomness verification
-- **📦 Flexible Deployment**: Push-based (data diode) or direct access modes
+- **Software Data Diode**: Unidirectional entropy flow from internal to external networks
+- **High Performance**: Lock-free buffers, zero-copy operations, async I/O
+- **Cryptographic Integrity**: HMAC-SHA256 signing + CRC32 checksums
+- **Production Ready**: Comprehensive metrics, structured logging, health checks
+- **AI Integration**: Model Context Protocol (MCP) server for AI agents
+- **Quality Validation**: Built-in Monte Carlo π estimation for randomness verification
+- **Flexible Deployment**: Push-based (data diode) or direct access modes
 
-## 🏗️ Architecture
+## Architecture
 
 ### Push-Based Mode (Data Diode Emulation)
 
@@ -71,7 +71,7 @@ This system provides secure access to quantum-generated random numbers from a lo
 └──────────────────────────────────┘
 ```
 
-## 🚀 Quick Start
+## Quick Start
 
 ### Prerequisites
 
@@ -141,7 +141,7 @@ hmac_secret_key: "<same-key-as-collector>"
 ./target/release/qrng-gateway --config config/gateway-direct.yaml
 ```
 
-## 📡 API Reference
+## API Reference
 
 ### GET /api/random
 
@@ -258,7 +258,7 @@ curl -X POST \
 }
 ```
 
-## 🤖 MCP Server Integration
+## MCP Server Integration
 
 The gateway exposes a Model Context Protocol (MCP) server for AI agent integration.
 
@@ -285,7 +285,7 @@ Add to `claude_desktop_config.json`:
 }
 ```
 
-## 🛠️ Development
+## Development
 
 ### Project Structure
 
@@ -355,7 +355,7 @@ cargo test test_buffer_operations
 RUST_LOG=debug cargo test
 ```
 
-## 📊 Performance
+## Performance
 
 Benchmarked on: AMD Ryzen 9 5900X, 32GB RAM, NVMe SSD
 
@@ -367,7 +367,7 @@ Benchmarked on: AMD Ryzen 9 5900X, 32GB RAM, NVMe SSD
 | Buffer efficiency | 99.7% |
 | Memory footprint | ~15MB (gateway) |
 
-## 🔒 Security Considerations
+## Security Considerations
 
 1. **HMAC Secret Key**: Use cryptographically secure 256-bit keys
 2. **API Keys**: Rotate regularly, use unique keys per client
@@ -376,7 +376,7 @@ Benchmarked on: AMD Ryzen 9 5900X, 32GB RAM, NVMe SSD
 5. **Rate Limiting**: Adjust limits based on threat model
 6. **Monitoring**: Enable metrics and set up alerts
 
-## 📝 Configuration Guide
+## Configuration Guide
 
 ### Collector Tuning
 
@@ -390,7 +390,7 @@ Benchmarked on: AMD Ryzen 9 5900X, 32GB RAM, NVMe SSD
 - **buffer_ttl**: Set based on acceptable staleness (1 hour typical)
 - **rate_limit_per_second**: Protect against abuse while allowing legitimate use
 
-## 🧪 Randomness Validation
+## Randomness Validation
 
 The system includes built-in quality validation:
 
@@ -407,7 +407,7 @@ curl "https://gateway/api/random?bytes=1048576&encoding=binary" > data.bin
 sts -f data.bin
 ```
 
-## 🐳 Docker Deployment
+## Docker Deployment
 
 ```dockerfile
 # Build stage
@@ -431,7 +431,7 @@ docker build -t qrng-gateway .
 docker run -p 8080:8080 -v ./config:/etc/qrng qrng-gateway
 ```
 
-## 📚 Publications & Research
+## Publications & Research
 
 This software is designed for academic publication:
 
@@ -442,7 +442,7 @@ This software is designed for academic publication:
   - MCP integration for AI agent accessibility
   - Built-in randomness quality validation
 
-## 🤝 Contributing
+## Contributing
 
 Contributions welcome! Please:
 
@@ -452,25 +452,6 @@ Contributions welcome! Please:
 4. Push to the branch (`git push origin feature/amazing-feature`)
 5. Open a Pull Request
 
-## 📄 License
+## License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## 🙏 Acknowledgments
-
-- Quantis QRNG appliance by ID Quantique
-- Rust async ecosystem (Tokio, Axum)
-- Model Context Protocol by Anthropic
-
-## 📧 Contact
-
-For questions or support:
-- Open an issue on GitHub
-- Email: [your-email]
-- Documentation: [your-docs-site]
-
----
-
-**Built with ❤️ and Rust**
-
-*"True randomness from the quantum realm, securely delivered."*
