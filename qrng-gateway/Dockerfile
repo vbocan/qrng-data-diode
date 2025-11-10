@@ -24,7 +24,7 @@ COPY qrng-mcp ./qrng-mcp
 RUN cargo build --release --bin qrng-gateway
 
 # Stage 2: Runtime
-FROM ubuntu:24.04
+FROM debian:bookworm-slim
 
 # Install runtime dependencies
 RUN apt-get update && apt-get install -y \
