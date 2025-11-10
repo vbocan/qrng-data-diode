@@ -10,7 +10,6 @@ tokio = { workspace = true }
 reqwest = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
-serde_yaml = { workspace = true }
 rmp-serde = { workspace = true }
 hmac = { workspace = true }
 sha2 = { workspace = true }
@@ -22,7 +21,6 @@ chrono = { workspace = true }
 bytes = { workspace = true }
 uuid = { workspace = true }
 url = { workspace = true }
-config = { workspace = true }
 crossbeam = { workspace = true }
 parking_lot = { workspace = true }
 rand = { workspace = true }

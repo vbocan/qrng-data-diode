@@ -29,7 +29,6 @@ use qrng_core::{
     metrics::Metrics,
     protocol::{EncodingFormat, EntropyPacket, GatewayStatus, HealthStatus},
 };
-use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::time::interval;
@@ -40,17 +39,9 @@ use tracing::{error, info, warn};
 #[command(name = "qrng-gateway")]
 #[command(about = "QRNG Gateway - Serves quantum random data via REST API", long_about = None)]
 struct Args {
-    /// Path to configuration file (ignored if --env-mode is set)
-    #[arg(short, long, default_value = "config/gateway-push.yaml")]
-    config: PathBuf,
-
     /// Log level (trace, debug, info, warn, error)
     #[arg(short, long, default_value = "info")]
     log_level: String,
-
-    /// Load configuration from environment variables instead of file
-    #[arg(long, default_value = "false")]
-    env_mode: bool,
 }
 
 /// Application state shared across handlers
@@ -394,16 +385,10 @@ async fn main() -> Result<()> {
 
     info!("QRNG Gateway v{}", env!("CARGO_PKG_VERSION"));
 
-    // Load configuration
-    let config = if args.env_mode {
-        info!("Loading configuration from environment variables");
-        GatewayConfig::from_env()
-            .context("Failed to load configuration from environment")?
-    } else {
-        info!("Loading configuration from file: {:?}", args.config);
-        GatewayConfig::from_file(&args.config)
-            .context("Failed to load configuration from file")?
-    };
+    // Load configuration from environment variables
+    info!("Loading configuration from environment variables");
+    let config = GatewayConfig::from_env()
+        .context("Failed to load configuration from environment")?;
 
     info!("Deployment mode: {:?}", config.deployment_mode);
     info!("Listen address: {}", config.listen_address);
