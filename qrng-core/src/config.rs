@@ -5,16 +5,6 @@ use serde::{Deserialize, Serialize};
 use std::time::Duration;
 use url::Url;
 
-/// Deployment mode for Entropy Gateway
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "snake_case")]
-pub enum DeploymentMode {
-    /// Push-based mode: receives data from Entropy Collector
-    PushBased,
-    /// Direct access mode: fetches data directly from appliance
-    DirectAccess,
-}
-
 /// Entropy Collector configuration
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct CollectorConfig {
@@ -103,10 +93,6 @@ impl CollectorConfig {
 /// Entropy Gateway configuration
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct GatewayConfig {
-    /// Deployment mode
-    #[serde(default = "default_deployment_mode")]
-    pub deployment_mode: DeploymentMode,
-    
     /// Bind address for HTTP server
     #[serde(default = "default_listen_address")]
     pub listen_address: String,
@@ -169,27 +155,6 @@ impl GatewayConfig {
         if let Ok(keys) = std::env::var("QRNG_API_KEYS") {
             config.api_keys = keys.split(',').map(|s| s.trim().to_string()).collect();
         }
-
-        // Parse direct mode if needed
-        if config.deployment_mode == DeploymentMode::DirectAccess {
-            if let Ok(url) = std::env::var("QRNG_DIRECT_APPLIANCE_URL") {
-                let chunk_size = std::env::var("QRNG_DIRECT_FETCH_CHUNK_SIZE")
-                    .ok()
-                    .and_then(|s| s.parse().ok())
-                    .unwrap_or(default_chunk_size());
-                let interval = std::env::var("QRNG_DIRECT_FETCH_INTERVAL_SECS")
-                    .ok()
-                    .and_then(|s| s.parse().ok())
-                    .unwrap_or(default_fetch_interval());
-
-                config.direct_mode = Some(DirectModeConfig {
-                    appliance_url: url,
-                    fetch_chunk_size: chunk_size,
-                    fetch_interval_secs: interval,
-                });
-            }
-        }
-
         config.validate()?;
         Ok(config)
     }
@@ -205,29 +170,6 @@ impl GatewayConfig {
         if self.api_keys.is_empty() {
             return Err(Error::Config("At least one API key required".to_string()));
         }
-
-        // Mode-specific validation
-        match self.deployment_mode {
-            DeploymentMode::PushBased => {
-                if self.hmac_secret_key.is_none() {
-                    return Err(Error::Config(
-                        "hmac_secret_key required for push-based mode".to_string()
-                    ));
-                }
-            }
-            DeploymentMode::DirectAccess => {
-                if self.direct_mode.is_none() {
-                    return Err(Error::Config(
-                        "direct_mode config required for direct access mode".to_string()
-                    ));
-                }
-                if let Some(ref dm) = self.direct_mode {
-                    Url::parse(&dm.appliance_url)
-                        .map_err(|e| Error::Config(format!("Invalid appliance_url: {}", e)))?;
-                }
-            }
-        }
-
         Ok(())
     }
 
@@ -269,10 +211,6 @@ fn default_initial_backoff_ms() -> u64 {
     100
 }
 
-fn default_deployment_mode() -> DeploymentMode {
-    DeploymentMode::PushBased
-}
-
 fn default_listen_address() -> String {
     "0.0.0.0:8080".to_string()
 }
@@ -307,8 +245,7 @@ mod tests {
 
     #[test]
     fn test_gateway_config_validation() {
-        let config = GatewayConfig {
-            deployment_mode: DeploymentMode::PushBased,
+        let config = GatewayConfig {            
             listen_address: "0.0.0.0:8080".to_string(),
             buffer_size: 10240,
             buffer_ttl_secs: 3600,

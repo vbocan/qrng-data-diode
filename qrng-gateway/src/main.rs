@@ -1,12 +1,11 @@
 //! Entropy Gateway - External Component for QRNG Data Diode
 //!
 //! The Entropy Gateway serves as the public-facing component that receives entropy
-//! from the Collector (push mode) or fetches directly from the appliance (direct mode).
+//! from the Collector via push-based delivery.
 //!
 //! # Features
 //!
 //! - REST API for entropy distribution
-//! - Two deployment modes: push-based and direct access
 //! - API key authentication
 //! - Rate limiting per client
 //! - Prometheus metrics
@@ -23,15 +22,13 @@ use axum::{
 use clap::Parser;
 use qrng_core::{
     buffer::EntropyBuffer,
-    config::{DeploymentMode, GatewayConfig},
+    config::GatewayConfig,
     crypto::{encode_base64, encode_hex, PacketSigner},
-    fetcher::{EntropyFetcher, FetcherConfig},
     metrics::Metrics,
     protocol::{EncodingFormat, EntropyPacket, GatewayStatus, HealthStatus},
 };
 use std::sync::Arc;
-use std::time::{Duration, Instant};
-use tokio::time::interval;
+use std::time::Instant;
 use tower_http::cors::CorsLayer;
 use tracing::{error, info, warn};
 
@@ -193,11 +190,6 @@ async fn get_status(
 ) -> Result<Json<GatewayStatus>, StatusCode> {
     extract_api_key(&headers, &state.config)?;
 
-    let mode = match state.config.deployment_mode {
-        DeploymentMode::PushBased => "push_based",
-        DeploymentMode::DirectAccess => "direct_access",
-    };
-
     let fill_percent = state.buffer.fill_percent();
     let status = if fill_percent < 10.0 {
         HealthStatus::Unhealthy
@@ -218,8 +210,7 @@ async fn get_status(
     }
 
     Ok(Json(GatewayStatus {
-        status,
-        deployment_mode: mode.to_string(),
+        status,        
         buffer_fill_percent: fill_percent,
         buffer_bytes_available: state.buffer.len(),
         last_data_received: state.buffer.oldest_timestamp(),
@@ -250,12 +241,7 @@ async fn get_metrics(State(state): State<AppState>) -> String {
 async fn receive_push(
     State(state): State<AppState>,
     body: axum::body::Bytes,
-) -> StatusCode {
-    // Only available in push mode
-    if state.config.deployment_mode != DeploymentMode::PushBased {
-        return StatusCode::METHOD_NOT_ALLOWED;
-    }
-
+) -> StatusCode {    
     let signer = match &state.signer {
         Some(s) => s,
         None => return StatusCode::INTERNAL_SERVER_ERROR,
@@ -315,58 +301,6 @@ async fn receive_push(
     }
 }
 
-/// Direct access mode: fetch loop
-async fn direct_fetch_loop(state: AppState) {
-    let direct_config = match &state.config.direct_mode {
-        Some(c) => c,
-        None => {
-            error!("Direct mode config missing");
-            return;
-        }
-    };
-
-    let fetcher_config = FetcherConfig::new(
-        direct_config.appliance_url.parse().expect("Invalid URL"),
-        direct_config.fetch_chunk_size,
-    );
-
-    let fetcher = match EntropyFetcher::new(fetcher_config) {
-        Ok(f) => f,
-        Err(e) => {
-            error!("Failed to initialize fetcher: {}", e);
-            return;
-        }
-    };
-
-    let mut ticker = interval(Duration::from_secs(direct_config.fetch_interval_secs));
-
-    info!("Starting direct access fetch loop");
-
-    loop {
-        ticker.tick().await;
-
-        match fetcher.fetch().await {
-            Ok(data) => {
-                state.metrics.record_fetch(data.len());
-                if let Err(e) = state.buffer.push(data) {
-                    error!("Failed to push to buffer: {}", e);
-                } else {
-                    info!(
-                        "Fetched data, buffer: {}/{} bytes ({:.1}%)",
-                        state.buffer.len(),
-                        state.buffer.capacity(),
-                        state.buffer.fill_percent()
-                    );
-                }
-            }
-            Err(e) => {
-                state.metrics.record_fetch_failure();
-                error!("Fetch failed: {}", e);
-            }
-        }
-    }
-}
-
 #[tokio::main]
 async fn main() -> Result<()> {
     // Parse arguments
@@ -384,13 +318,14 @@ async fn main() -> Result<()> {
         .init();
 
     info!("QRNG Gateway v{}", env!("CARGO_PKG_VERSION"));
+    info!("The gateway acts as a data diode for the Quantis Appliance and receives pushed data from the collector.");
+    info!("Developed by Valer BOCAN, PhD, CSSLP - www.bocan.ro");
 
     // Load configuration from environment variables
     info!("Loading configuration from environment variables");
     let config = GatewayConfig::from_env()
         .context("Failed to load configuration from environment")?;
-
-    info!("Deployment mode: {:?}", config.deployment_mode);
+    
     info!("Listen address: {}", config.listen_address);
 
     // Create buffer
@@ -401,9 +336,7 @@ async fn main() -> Result<()> {
     };
 
     // Create signer for push mode
-    let signer = if config.deployment_mode == DeploymentMode::PushBased {
-        let key = config.hmac_secret_key.as_ref()
-            .context("HMAC key required for push mode")?;
+    let signer = if let Some(key) = config.hmac_secret_key.as_ref() {
         let key_bytes = hex::decode(key)
             .context("Invalid HMAC key (must be hex-encoded)")?;
         Some(PacketSigner::new(key_bytes))
@@ -420,14 +353,6 @@ async fn main() -> Result<()> {
         start_time: Instant::now(),
         rate_limiter: Arc::new(RateLimiter::new(config.rate_limit_per_second)),
     };
-
-    // Start direct fetch loop if in direct mode
-    if config.deployment_mode == DeploymentMode::DirectAccess {
-        let fetch_state = state.clone();
-        tokio::spawn(async move {
-            direct_fetch_loop(fetch_state).await;
-        });
-    }
 
     // Build router
     let app = Router::new()
