@@ -49,5 +49,4 @@ USER qrng
 # Set environment variables
 ENV RUST_LOG=info
 
-# Run with --env-mode flag to use environment variables
-CMD ["/app/qrng-collector", "--env-mode", "--log-level", "info"]
+CMD ["/app/qrng-collector", "--log-level", "info"]

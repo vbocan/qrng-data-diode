@@ -1,5 +1,8 @@
 services:
   qrng-collector:
+    build:
+      context: ..
+      dockerfile: qrng-collector/Dockerfile
     image: ghcr.io/vbocan/qrng-collector:latest
     container_name: qrng-collector
     restart: unless-stopped
@@ -11,10 +14,6 @@ services:
     # Additional environment variables
     environment:
       - RUST_LOG=${LOG_LEVEL:-info}
-
-    # Network mode: Use host network or bridge
-    # For internal network access to QRNG appliance
-    network_mode: bridge
 
     # Health check (monitor logs since no HTTP endpoint)
     healthcheck:

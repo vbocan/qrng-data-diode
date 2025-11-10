@@ -57,5 +57,4 @@ ENV RUST_LOG=info
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD curl -f http://localhost:8080/health || exit 1
 
-# Run with --env-mode flag to use environment variables
-CMD ["/app/qrng-gateway", "--env-mode", "--log-level", "info"]
+CMD ["/app/qrng-gateway", "--log-level", "info"]
