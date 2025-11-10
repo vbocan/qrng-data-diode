@@ -45,7 +45,8 @@ pub struct CollectorConfig {
 impl CollectorConfig {
     /// Load configuration from environment variables
     pub fn from_env() -> Result<Self> {
-        let config: Self = envy::from_env()
+        let config: Self = envy::prefixed("QRNG_")
+            .from_env()
             .map_err(|e| Error::Config(format!("Failed to parse environment variables: {}", e)))?;
         config.validate()?;
         Ok(config)

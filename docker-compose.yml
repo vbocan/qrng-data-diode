@@ -61,15 +61,15 @@ services:
 
     # Environment variables
     environment:      
-      - APPLIANCE_URL=https://random.cs.upt.ro
-      - PUSH_URL=http://qrng-gateway:8080
-      - HMAC_SECRET_KEY=5f21dde6f44182da494e698ec24ea3c90df242cfb51a6acbebf28bb377d89a5e
-      - FETCH_CHUNK_SIZE=1798
-      - FETCH_INTERVAL_MS=100
-      - BUFFER_SIZE=10485760
-      - PUSH_INTERVAL_MS=1000
-      - MAX_RETRIES=5
-      - INITIAL_BACKOFF_MS=100
+      - QRNG_APPLIANCE_URL=https://random.cs.upt.ro
+      - QRNG_PUSH_URL=http://qrng-gateway:8080
+      - QRNG_HMAC_SECRET_KEY=5f21dde6f44182da494e698ec24ea3c90df242cfb51a6acbebf28bb377d89a5e
+      - QRNG_FETCH_CHUNK_SIZE=1798
+      - QRNG_FETCH_INTERVAL_MS=100
+      - QRNG_BUFFER_SIZE=10485760
+      - QRNG_PUSH_INTERVAL_MS=1000
+      - QRNG_MAX_RETRIES=5
+      - QRNG_INITIAL_BACKOFF_MS=100
       - LOG_LEVEL=info
 
     # Network configuration
