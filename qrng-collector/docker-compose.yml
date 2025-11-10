@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   qrng-collector:
     image: ghcr.io/vbocan/qrng-collector:latest
