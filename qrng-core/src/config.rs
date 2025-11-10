@@ -15,9 +15,9 @@ pub struct CollectorConfig {
     #[serde(default = "default_chunk_size")]
     pub fetch_chunk_size: usize,
     
-    /// Fetch interval in seconds
-    #[serde(default = "default_fetch_interval")]
-    pub fetch_interval_secs: u64,
+    /// Fetch interval in milliseconds
+    #[serde(default = "default_fetch_interval_ms")]
+    pub fetch_interval_ms: u64,
     
     /// Internal buffer size in bytes
     #[serde(default = "default_buffer_size")]
@@ -26,9 +26,9 @@ pub struct CollectorConfig {
     /// URL of Entropy Gateway push endpoint
     pub push_url: String,
     
-    /// Push interval in seconds
-    #[serde(default = "default_push_interval")]
-    pub push_interval_secs: u64,
+    /// Push interval in milliseconds
+    #[serde(default = "default_push_interval_ms")]
+    pub push_interval_ms: u64,
     
     /// HMAC secret key (hex-encoded)
     pub hmac_secret_key: String,
@@ -82,11 +82,11 @@ impl CollectorConfig {
     }
 
     pub fn fetch_interval(&self) -> Duration {
-        Duration::from_secs(self.fetch_interval_secs)
+        Duration::from_millis(self.fetch_interval_ms)
     }
 
     pub fn push_interval(&self) -> Duration {
-        Duration::from_secs(self.push_interval_secs)
+        Duration::from_millis(self.push_interval_ms)
     }
 }
 
@@ -138,9 +138,9 @@ pub struct DirectModeConfig {
     #[serde(default = "default_chunk_size")]
     pub fetch_chunk_size: usize,
     
-    /// Fetch interval in seconds
-    #[serde(default = "default_fetch_interval")]
-    pub fetch_interval_secs: u64,
+    /// Fetch interval in milliseconds
+    #[serde(default = "default_fetch_interval_ms")]
+    pub fetch_interval_ms: u64,
 }
 
 impl GatewayConfig {
@@ -195,12 +195,12 @@ fn default_gateway_buffer_size() -> usize {
     crate::DEFAULT_BUFFER_SIZE
 }
 
-fn default_fetch_interval() -> u64 {
-    5
+fn default_fetch_interval_ms() -> u64 {
+    5000 // 5 seconds in ms
 }
 
-fn default_push_interval() -> u64 {
-    10
+fn default_push_interval_ms() -> u64 {
+    10000 // 10 seconds in ms
 }
 
 fn default_max_retries() -> u32 {
