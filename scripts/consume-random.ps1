@@ -24,13 +24,16 @@
     Optional file path to save the random data
 
 .PARAMETER Requests
-    Number of requests to make (default: 1)
+    Number of requests to make (default: 1). Set to 0 for continuous mode.
 
 .PARAMETER Delay
     Delay between requests in milliseconds (default: 100)
 
 .PARAMETER ShowStats
     Display statistics about the received data
+
+.PARAMETER Continuous
+    Run script continuously until interrupted (Ctrl+C)
 
 .EXAMPLE
     .\consume-random.ps1
@@ -61,11 +64,12 @@ param(
     [ValidateSet("hex", "base64", "binary")]
     [string]$Encoding = "hex",
     [string]$OutputFile = "",
-    [ValidateRange(1, 1000)]
+    [ValidateRange(0, 1000)]
     [int]$Requests = 1,
     [ValidateRange(0, 10000)]
     [int]$Delay = 100,
-    [switch]$ShowStats
+    [switch]$ShowStats,
+    [switch]$Continuous
 )
 
 # Colors for output
@@ -181,18 +185,34 @@ function Save-ToFile {
 }
 
 # Main execution
+$isContinuous = $Continuous -or $Requests -eq 0
+$requestLimit = if ($isContinuous) { [int]::MaxValue } else { $Requests }
+
+# Enable statistics automatically in continuous mode
+if ($isContinuous) {
+    $ShowStats = $true
+}
+
 Write-ColorOutput "`n=== QRNG Gateway Random Data Consumer ===" -Color $Colors.Info
+if ($isContinuous) {
+    Write-ColorOutput "Mode: CONTINUOUS (Press Ctrl+C to stop)" -Color $Colors.Warning
+} else {
+    Write-ColorOutput "Mode: Standard" -Color $Colors.Info
+}
 Write-ColorOutput "Gateway: $GatewayUrl" -Color $Colors.Info
-Write-ColorOutput "Requests: $Requests | Bytes per request: $Bytes | Encoding: $Encoding`n" -Color $Colors.Info
+Write-ColorOutput "Bytes per request: $Bytes | Encoding: $Encoding`n" -Color $Colors.Info
 
 $totalBytes = 0
 $successCount = 0
 $failCount = 0
 $startTime = Get-Date
 $allData = @()
+$lastStatsUpdate = Get-Date
 
-for ($i = 1; $i -le $Requests; $i++) {
-    Write-ColorOutput "[$i/$Requests] Requesting $Bytes bytes..." -Color $Colors.Info
+for ($i = 1; $i -le $requestLimit; $i++) {
+    if (-not $isContinuous) {
+        Write-ColorOutput "[$i/$Requests] Requesting $Bytes bytes..." -Color $Colors.Info
+    }
     
     $result = Get-RandomData -Url $GatewayUrl -Key $ApiKey -ByteCount $Bytes -Format $Encoding
     
@@ -201,24 +221,57 @@ for ($i = 1; $i -le $Requests; $i++) {
         $totalBytes += $result.Length
         $allData += $result.Data
         
-        Write-ColorOutput "  ✓ Success (HTTP $($result.StatusCode)) - Received $($result.Length) bytes" -Color $Colors.Success
-        
-        if ($Requests -eq 1 -or $ShowStats) {
-            # Show preview of data
-            $preview = if ($result.Data.Length -gt 100) {
-                $result.Data.Substring(0, 100) + "..."
-            } else {
-                $result.Data
+        if (-not $isContinuous) {
+            Write-ColorOutput "  ✓ Success (HTTP $($result.StatusCode)) - Received $($result.Length) bytes" -Color $Colors.Success
+            
+            if ($Requests -eq 1 -or $ShowStats) {
+                # Show preview of data
+                $preview = if ($result.Data.Length -gt 100) {
+                    $result.Data.Substring(0, 100) + "..."
+                } else {
+                    $result.Data
+                }
+                Write-ColorOutput "  Data: $preview" -Color $Colors.Data
             }
-            Write-ColorOutput "  Data: $preview" -Color $Colors.Data
         }
     }
     else {
         $failCount++
-        Write-ColorOutput "  ✗ Failed (HTTP $($result.StatusCode)) - $($result.Error)" -Color $Colors.Error
+        if (-not $isContinuous) {
+            Write-ColorOutput "  ✗ Failed (HTTP $($result.StatusCode)) - $($result.Error)" -Color $Colors.Error
+        }
     }
     
-    if ($i -lt $Requests -and $Delay -gt 0) {
+    # Update real-time stats every 2 seconds in continuous mode
+    if ($isContinuous -and ((Get-Date) - $lastStatsUpdate).TotalSeconds -ge 2) {
+        $currentTime = Get-Date
+        $duration = ($currentTime - $startTime).TotalSeconds
+        $throughput = if ($duration -gt 0) { [math]::Round($totalBytes / $duration, 2) } else { 0 }
+        
+        [Console]::Clear()
+        Write-ColorOutput "=== QRNG Gateway - Real-time Statistics ===" -Color $Colors.Info
+        Write-ColorOutput "Gateway: $GatewayUrl | Press Ctrl+C to stop`n" -Color $Colors.Info
+        
+        Write-ColorOutput "Requests:  $successCount successful | $failCount failed | Total: $($successCount + $failCount)" -Color $Colors.Data
+        Write-ColorOutput "Data:      $totalBytes bytes | Duration: $([math]::Round($duration, 1))s | Throughput: $throughput bytes/sec" -Color $Colors.Data
+        Write-ColorOutput "Per req:   $Bytes bytes | Encoding: $Encoding | Delay: $Delay ms`n" -Color $Colors.Data
+        
+        # Show statistics if requested or in continuous mode
+        if (($ShowStats -or $isContinuous) -and $successCount -gt 0) {
+            $combinedData = $allData -join ""
+            $stats = Get-DataStats -Data $combinedData
+            
+            Write-ColorOutput "Statistics (combined data):" -Color $Colors.Info
+            Write-ColorOutput "  Bytes analyzed: $($stats.Length)" -Color $Colors.Data
+            Write-ColorOutput "  Mean value: $($stats.Mean)" -Color $Colors.Data
+            Write-ColorOutput "  Range: $($stats.Min) - $($stats.Max)" -Color $Colors.Data
+            Write-ColorOutput "  Unique bytes: $($stats.Unique)/256 ($($stats.Entropy)% entropy)" -Color $Colors.Data
+        }
+        
+        $lastStatsUpdate = $currentTime
+    }
+    
+    if ($i -lt $requestLimit -and $Delay -gt 0) {
         Start-Sleep -Milliseconds $Delay
     }
 }
@@ -226,26 +279,37 @@ for ($i = 1; $i -le $Requests; $i++) {
 $endTime = Get-Date
 $duration = ($endTime - $startTime).TotalSeconds
 
-# Display summary
-Write-ColorOutput "`n=== Summary ===" -Color $Colors.Info
-Write-ColorOutput "Total Requests: $Requests" -Color $Colors.Data
-Write-ColorOutput "Successful: $successCount" -Color $Colors.Success
-Write-ColorOutput "Failed: $failCount" -Color $(if ($failCount -gt 0) { $Colors.Error } else { $Colors.Data })
-Write-ColorOutput "Total Bytes: $totalBytes" -Color $Colors.Data
-Write-ColorOutput "Duration: $([math]::Round($duration, 2))s" -Color $Colors.Data
-Write-ColorOutput "Throughput: $([math]::Round($totalBytes / $duration, 2)) bytes/sec" -Color $Colors.Data
+# Display summary (skip in continuous mode on Ctrl+C)
+if (-not $isContinuous) {
+    Write-ColorOutput "`n=== Summary ===" -Color $Colors.Info
+    Write-ColorOutput "Total Requests: $Requests" -Color $Colors.Data
+    Write-ColorOutput "Successful: $successCount" -Color $Colors.Success
+    Write-ColorOutput "Failed: $failCount" -Color $(if ($failCount -gt 0) { $Colors.Error } else { $Colors.Data })
+    Write-ColorOutput "Total Bytes: $totalBytes" -Color $Colors.Data
+    Write-ColorOutput "Duration: $([math]::Round($duration, 2))s" -Color $Colors.Data
+    Write-ColorOutput "Throughput: $([math]::Round($totalBytes / $duration, 2)) bytes/sec" -Color $Colors.Data
 
-# Show statistics if requested
-if ($ShowStats -and $successCount -gt 0) {
-    Write-ColorOutput "`n=== Data Statistics ===" -Color $Colors.Info
-    $combinedData = $allData -join ""
-    $stats = Get-DataStats -Data $combinedData
-    
-    Write-ColorOutput "Bytes analyzed: $($stats.Length)" -Color $Colors.Data
-    Write-ColorOutput "Mean value: $($stats.Mean)" -Color $Colors.Data
-    Write-ColorOutput "Min value: $($stats.Min)" -Color $Colors.Data
-    Write-ColorOutput "Max value: $($stats.Max)" -Color $Colors.Data
-    Write-ColorOutput "Unique bytes: $($stats.Unique)/256 ($($stats.Entropy)%)" -Color $Colors.Data
+    # Show statistics if requested
+    if ($ShowStats -and $successCount -gt 0) {
+        Write-ColorOutput "`n=== Data Statistics ===" -Color $Colors.Info
+        $combinedData = $allData -join ""
+        $stats = Get-DataStats -Data $combinedData
+        
+        Write-ColorOutput "Bytes analyzed: $($stats.Length)" -Color $Colors.Data
+        Write-ColorOutput "Mean value: $($stats.Mean)" -Color $Colors.Data
+        Write-ColorOutput "Min value: $($stats.Min)" -Color $Colors.Data
+        Write-ColorOutput "Max value: $($stats.Max)" -Color $Colors.Data
+        Write-ColorOutput "Unique bytes: $($stats.Unique)/256 ($($stats.Entropy)%)" -Color $Colors.Data
+    }
+} else {
+    # Final summary for continuous mode
+    Write-ColorOutput "`n=== Final Statistics ===" -Color $Colors.Info
+    Write-ColorOutput "Total Requests: $($successCount + $failCount)" -Color $Colors.Data
+    Write-ColorOutput "Successful: $successCount" -Color $Colors.Success
+    Write-ColorOutput "Failed: $failCount" -Color $(if ($failCount -gt 0) { $Colors.Error } else { $Colors.Data })
+    Write-ColorOutput "Total Bytes: $totalBytes" -Color $Colors.Data
+    Write-ColorOutput "Duration: $([math]::Round($duration, 2))s" -Color $Colors.Data
+    Write-ColorOutput "Average Throughput: $([math]::Round($totalBytes / $duration, 2)) bytes/sec" -Color $Colors.Data
 }
 
 # Save to file if specified
