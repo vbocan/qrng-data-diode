@@ -14,7 +14,6 @@ target/
 docs/
 *.md
 !README.md
-Quantis Appliance Manual/
 
 # IDE
 .vscode/
@@ -22,14 +21,27 @@ Quantis Appliance Manual/
 *.swp
 *.swo
 *~
-
-# OS
 .DS_Store
-Thumbs.db
+
+# Config examples (include actual configs at runtime via volumes)
+config/
+
+# Logs
+*.log
+
+# Temporary files
+tmp/
+temp/
 
 # Test files
 tests/
-benches/
+**/tests/
 
-# CI/CD (include if needed in build)
-# .github/
+# CI files
+.github/
+
+# Claude artifacts
+.claude/
+
+# Other
+Quantis Appliance Manual/

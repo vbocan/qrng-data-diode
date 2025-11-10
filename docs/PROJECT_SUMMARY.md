@@ -5,7 +5,7 @@
 ### Code Metrics
 - **Total Lines**: ~3,500 (implementation + tests)
 - **Core Library**: 1,321 lines
-- **Entropy Collector**: 249 lines
+- **QRNG Collector**: 249 lines
 - **Documentation**: 1,547 lines
 - **Configuration**: 77 lines
 - **Test Coverage**: >90% (estimated)
@@ -24,7 +24,7 @@ qrng-data-diode/
 │   ├── fetcher.rs (155)
 │   ├── crypto.rs (125)
 │   └── error.rs (79)
-├── entropy-collector/             249 lines
+├── qrng-collector/                249 lines
 │   └── main.rs
 ├── config/                         77 lines
 │   ├── collector.yaml
@@ -72,7 +72,7 @@ qrng-data-diode/
 - Dual deployment mode support
 - Environment overrides ready
 
-### 2. Entropy Collector
+### 2. QRNG Collector
 
 ✅ **Actor-Based Architecture**
 - Independent fetch and push loops
@@ -244,10 +244,10 @@ wrk -t4 -c100 -d30s https://gateway/api/random?bytes=1024
 
 # Memory profiling
 cargo build --release
-valgrind --tool=massif ./target/release/entropy-collector
+valgrind --tool=massif ./target/release/qrng-collector
 
 # CPU profiling
-cargo flamegraph --bin entropy-gateway
+cargo flamegraph --bin qrng-gateway
 
 # Benchmark suite
 cargo bench

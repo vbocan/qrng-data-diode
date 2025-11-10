@@ -54,6 +54,14 @@ pub struct CollectorConfig {
 }
 
 impl CollectorConfig {
+    /// Load configuration from environment variables
+    pub fn from_env() -> Result<Self> {
+        let config: Self = envy::from_env()
+            .map_err(|e| Error::Config(format!("Failed to parse environment variables: {}", e)))?;
+        config.validate()?;
+        Ok(config)
+    }
+
     /// Load configuration from YAML file
     pub fn from_file(path: impl AsRef<Path>) -> Result<Self> {
         let content = std::fs::read_to_string(path)?;
@@ -160,6 +168,42 @@ pub struct DirectModeConfig {
 }
 
 impl GatewayConfig {
+    /// Load configuration from environment variables
+    pub fn from_env() -> Result<Self> {
+        // Parse basic config from env
+        let mut config: Self = envy::prefixed("QRNG_")
+            .from_env()
+            .map_err(|e| Error::Config(format!("Failed to parse environment variables: {}", e)))?;
+
+        // Parse API keys from comma-separated string
+        if let Ok(keys) = std::env::var("QRNG_API_KEYS") {
+            config.api_keys = keys.split(',').map(|s| s.trim().to_string()).collect();
+        }
+
+        // Parse direct mode if needed
+        if config.deployment_mode == DeploymentMode::DirectAccess {
+            if let Ok(url) = std::env::var("QRNG_DIRECT_APPLIANCE_URL") {
+                let chunk_size = std::env::var("QRNG_DIRECT_FETCH_CHUNK_SIZE")
+                    .ok()
+                    .and_then(|s| s.parse().ok())
+                    .unwrap_or(default_chunk_size());
+                let interval = std::env::var("QRNG_DIRECT_FETCH_INTERVAL_SECS")
+                    .ok()
+                    .and_then(|s| s.parse().ok())
+                    .unwrap_or(default_fetch_interval());
+
+                config.direct_mode = Some(DirectModeConfig {
+                    appliance_url: url,
+                    fetch_chunk_size: chunk_size,
+                    fetch_interval_secs: interval,
+                });
+            }
+        }
+
+        config.validate()?;
+        Ok(config)
+    }
+
     /// Load configuration from YAML file
     pub fn from_file(path: impl AsRef<Path>) -> Result<Self> {
         let content = std::fs::read_to_string(path)?;

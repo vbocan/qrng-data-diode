@@ -98,7 +98,7 @@ This document provides a comprehensive summary of the elegant Rust implementatio
   - Minimal performance impact (<1%)
 - **Observability**: Production-ready monitoring
 
-### 2. Entropy Collector (`entropy-collector`)
+### 2. QRNG Collector (`qrng-collector`)
 
 #### Main Implementation (`main.rs`)
 - **Architecture**: Actor-based design with Tokio
@@ -142,7 +142,7 @@ This document provides a comprehensive summary of the elegant Rust implementatio
    - Monotonic guarantees
    - Gap detection support
 
-### 3. Entropy Gateway (`entropy-gateway`) - Design
+### 3. QRNG Gateway (`qrng-gateway`) - Design
 
 #### Planned Architecture
 

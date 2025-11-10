@@ -37,16 +37,20 @@ use tower_http::cors::CorsLayer;
 use tracing::{error, info, warn};
 
 #[derive(Parser, Debug)]
-#[command(name = "entropy-gateway")]
-#[command(about = "QRNG Entropy Gateway - Serves quantum random data via REST API", long_about = None)]
+#[command(name = "qrng-gateway")]
+#[command(about = "QRNG Gateway - Serves quantum random data via REST API", long_about = None)]
 struct Args {
-    /// Path to configuration file
+    /// Path to configuration file (ignored if --env-mode is set)
     #[arg(short, long, default_value = "config/gateway-push.yaml")]
     config: PathBuf,
 
     /// Log level (trace, debug, info, warn, error)
     #[arg(short, long, default_value = "info")]
     log_level: String,
+
+    /// Load configuration from environment variables instead of file
+    #[arg(long, default_value = "false")]
+    env_mode: bool,
 }
 
 /// Application state shared across handlers
@@ -388,13 +392,19 @@ async fn main() -> Result<()> {
         .json()
         .init();
 
-    info!("Entropy Gateway v{}", env!("CARGO_PKG_VERSION"));
+    info!("QRNG Gateway v{}", env!("CARGO_PKG_VERSION"));
 
     // Load configuration
-    let config = GatewayConfig::from_file(&args.config)
-        .context("Failed to load configuration")?;
+    let config = if args.env_mode {
+        info!("Loading configuration from environment variables");
+        GatewayConfig::from_env()
+            .context("Failed to load configuration from environment")?
+    } else {
+        info!("Loading configuration from file: {:?}", args.config);
+        GatewayConfig::from_file(&args.config)
+            .context("Failed to load configuration from file")?
+    };
 
-    info!("Configuration loaded from {:?}", args.config);
     info!("Deployment mode: {:?}", config.deployment_mode);
     info!("Listen address: {}", config.listen_address);
 

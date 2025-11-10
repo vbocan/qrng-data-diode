@@ -55,7 +55,7 @@ impl McpServer {
             result: Some(serde_json::json!({
                 "protocolVersion": MCP_VERSION,
                 "serverInfo": {
-                    "name": "qrng-entropy-gateway",
+                    "name": "qrng-gateway",
                     "version": env!("CARGO_PKG_VERSION")
                 },
                 "capabilities": {

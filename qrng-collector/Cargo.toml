@@ -1,28 +1,28 @@
 [package]
-name = "entropy-gateway"
+name = "qrng-collector"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
 authors.workspace = true
 
 [[bin]]
-name = "entropy-gateway"
+name = "qrng-collector"
 path = "src/main.rs"
 
 [dependencies]
 qrng-core = { path = "../qrng-core" }
 tokio = { workspace = true }
-axum = { workspace = true }
-tower = { workspace = true }
-tower-http = { workspace = true }
-hyper = { workspace = true }
 reqwest = { workspace = true }
-serde = { workspace = true }
-serde_json = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
 anyhow = { workspace = true }
 clap = { version = "4.5", features = ["derive"] }
-chrono = { workspace = true }
 hex = "0.4"
-parking_lot = { workspace = true }
+
+[target.'cfg(unix)'.dependencies]
+signal-hook = "0.3"
+signal-hook-tokio = { version = "0.3", features = ["futures-v0_3"] }
+futures = "0.3"
+
+[target.'cfg(windows)'.dependencies]
+tokio = { workspace = true, features = ["signal"] }

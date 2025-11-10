@@ -12,8 +12,8 @@ This phase establishes the project structure and defines common components that 
     *   A monorepo using a Cargo workspace is recommended to manage the two components and shared code.
     *   **`qrng-data-diode/`**
         *   **`Cargo.toml`** (Workspace definition)
-        *   **`entropy-collector/`**: Crate for the Entropy Collector binary (internal pusher).
-        *   **`entropy-gateway/`**: Crate for the Entropy Gateway binary (external receiver/server).
+        *   **`qrng-collector/`**: Crate for the QRNG Collector binary (internal pusher).
+        *   **`qrng-gateway/`**: Crate for the QRNG Gateway binary (external receiver/server).
         *   **`qrng-core/`**: Crate for shared logic (data structures, configuration models, fetching logic).
         *   **`qrng-mcp/`**: Optional crate for Model Context Protocol server implementation.
 
@@ -189,7 +189,7 @@ This phase focuses on the external component that serves data to clients, suppor
 This final phase adds the innovative extensions and ensures the project is robust and usable.
 
 *   **Step 4.1: Integrate the Model Context Protocol (MCP) Server**
-    *   Implement in the `qrng-mcp` crate or add directly to `entropy-gateway` (FR-10, FR-11, FR-12).
+    *   Implement in the `qrng-mcp` crate or add directly to `qrng-gateway` (FR-10, FR-11, FR-12).
     *   Expose MCP tools that draw from the same entropy buffer:
         *   **`get_random_bytes`**: Returns N bytes (hex/base64 encoded).
         *   **`get_random_integers`**: Returns array of random integers in specified range.
