@@ -1,5 +1,8 @@
 services:
   qrng-gateway:
+    build:
+      context: ..
+      dockerfile: qrng-gateway/Dockerfile
     image: ghcr.io/vbocan/qrng-gateway:latest
     container_name: qrng-gateway
     restart: unless-stopped
@@ -17,9 +20,6 @@ services:
     # Port mapping
     ports:
       - "8080:8080"
-
-    # Network mode
-    network_mode: bridge
 
     # Health check
     healthcheck:
