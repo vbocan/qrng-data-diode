@@ -63,15 +63,13 @@ struct Collector {
 impl Collector {
     fn new(config: CollectorConfig) -> Result<Self> {
         // Parse HMAC secret key
-        let hmac_key = hex::decode(&config.hmac_secret_key)
-            .context("Failed to decode HMAC secret key")?;
+        let hmac_key =
+            hex::decode(&config.hmac_secret_key).context("Failed to decode HMAC secret key")?;
         let signer = PacketSigner::new(hmac_key);
 
         // Create fetcher
-        let fetcher_config = FetcherConfig::new(
-            config.appliance_url.parse()?,
-            config.fetch_chunk_size,
-        );
+        let fetcher_config =
+            FetcherConfig::new(config.appliance_url.parse()?, config.fetch_chunk_size);
         let fetcher = EntropyFetcher::new(fetcher_config)?;
 
         // Create buffer
@@ -95,10 +93,14 @@ impl Collector {
 
     /// Main run loop
     async fn run(self: Arc<Self>) -> Result<()> {
-        info!("Starting Entropy Collector");
+        info!("QRNG Collector v{}", env!("CARGO_PKG_VERSION"));
+        info!("The collector runs in the same network as the Quantis Appliance and pushes data to the gateway via unidirectional flow.");
+        info!("Developed by Valer BOCAN, PhD, CSSLP - www.bocan.ro");
         info!("Appliance URL: {}", self.config.appliance_url);
-        info!("Push URL: {}", self.config.push_url);
+        info!("Random data is pushed to URL: {}", self.config.push_url);
         info!("Buffer size: {} bytes", self.config.buffer_size);
+        info!("Fetch interval: {:?} sec.", self.config.fetch_interval());
+        info!("Push interval: {:?} sec.", self.config.push_interval());
 
         // Spawn fetch task
         let fetch_handle = {
@@ -116,7 +118,7 @@ impl Collector {
         Self::wait_for_shutdown().await;
 
         info!("Shutdown signal received, flushing buffer...");
-        
+
         // Attempt final push
         if let Err(e) = self.push_buffer().await {
             error!("Failed to flush buffer on shutdown: {}", e);
@@ -140,7 +142,7 @@ impl Collector {
             match self.fetcher.fetch().await {
                 Ok(data) => {
                     self.metrics.record_fetch(data.len());
-                    
+
                     if let Err(e) = self.buffer.push(data) {
                         error!("Failed to push to buffer: {}", e);
                     } else {
@@ -191,12 +193,14 @@ impl Collector {
         };
 
         // Create packet
-        let sequence = self.sequence.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        let sequence = self
+            .sequence
+            .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
         let mut packet = EntropyPacket::new(sequence, data.to_vec());
-        
+
         // Add checksum
         packet.checksum = Some(packet.calculate_checksum());
-        
+
         // Sign packet
         self.signer.sign_packet(&mut packet)?;
 
@@ -228,10 +232,10 @@ impl Collector {
             let status = response.status();
             let body = response.text().await.unwrap_or_default();
             error!("Push failed with status {}: {}", status, body);
-            
+
             // Put data back in buffer
             self.buffer.push(packet.data)?;
-            
+
             Err(anyhow::anyhow!("Push failed: {}", status))
         }
     }
@@ -240,12 +244,12 @@ impl Collector {
     async fn wait_for_shutdown() {
         #[cfg(unix)]
         {
+            use futures::stream::StreamExt;
             use signal_hook::consts::signal::*;
             use signal_hook_tokio::Signals;
-            use futures::stream::StreamExt;
 
-            let mut signals = Signals::new(&[SIGINT, SIGTERM])
-                .expect("Failed to register signal handlers");
+            let mut signals =
+                Signals::new(&[SIGINT, SIGTERM]).expect("Failed to register signal handlers");
 
             if let Some(signal) = signals.next().await {
                 info!("Received signal: {:?}", signal);
@@ -268,9 +272,11 @@ async fn main() -> Result<()> {
     let args = Args::parse();
 
     // Initialize tracing
-    let log_level = args.log_level.parse::<tracing::Level>()
+    let log_level = args
+        .log_level
+        .parse::<tracing::Level>()
         .unwrap_or(tracing::Level::INFO);
-    
+
     tracing_subscriber::fmt()
         .with_max_level(log_level)
         .with_target(false)
@@ -282,8 +288,8 @@ async fn main() -> Result<()> {
 
     // Load configuration from environment variables
     info!("Loading configuration from environment variables");
-    let config = CollectorConfig::from_env()
-        .context("Failed to load configuration from environment")?;
+    let config =
+        CollectorConfig::from_env().context("Failed to load configuration from environment")?;
 
     // Create and run collector
     let collector = Arc::new(Collector::new(config)?);

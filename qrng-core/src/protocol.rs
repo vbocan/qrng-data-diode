@@ -106,9 +106,6 @@ pub struct GatewayStatus {
     /// Overall health status
     pub status: HealthStatus,
 
-    /// Deployment mode
-    pub deployment_mode: String,
-
     /// Buffer fill percentage (0-100)
     pub buffer_fill_percent: f64,
 
