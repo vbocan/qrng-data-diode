@@ -1,0 +1,102 @@
+# Docker Compose for QRNG Data Diode - Combined Deployment
+# Run both collector and gateway on the same machine
+#
+# Usage:
+#   docker compose up -d          # Start both services
+#   docker compose logs -f        # View logs
+#   docker compose down           # Stop services
+#
+# Before running:
+#   1. Copy qrng-collector/.env.example to qrng-collector/.env and configure
+#   2. Copy qrng-gateway/.env.example to qrng-gateway/.env and configure
+#   3. Ensure HMAC_SECRET_KEY matches in both .env files
+
+services:
+  qrng-gateway:
+    build:
+      context: .
+      dockerfile: qrng-gateway/Dockerfile
+    image: ghcr.io/vbocan/qrng-gateway:latest
+    container_name: qrng-gateway
+    restart: unless-stopped
+
+    # Environment variables
+    environment:
+      - QRNG_HMAC_SECRET_KEY=5f21dde6f44182da494e698ec24ea3c90df242cfb51a6acbebf28bb377d89a5e
+      - QRNG_LISTEN_ADDRESS=0.0.0.0:8080
+      - QRNG_BUFFER_SIZE=10485760
+      - QRNG_API_KEYS=test-key-1234567890
+      - LOG_LEVEL=info
+
+    # Port mapping
+    ports:
+      - "8080:8080"
+
+    # Network configuration
+    networks:
+      - qrng-network
+
+    # Health check
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+    # Logging configuration
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  qrng-collector:
+    build:
+      context: .
+      dockerfile: qrng-collector/Dockerfile
+    image: ghcr.io/vbocan/qrng-collector:latest
+    container_name: qrng-collector
+    restart: unless-stopped
+
+    # Environment variables
+    environment:      
+      - APPLIANCE_URL=https://random.cs.upt.ro
+      - PUSH_URL=http://qrng-gateway:8080
+      - HMAC_SECRET_KEY=5f21dde6f44182da494e698ec24ea3c90df242cfb51a6acbebf28bb377d89a5e
+      - FETCH_CHUNK_SIZE=1798
+      - FETCH_INTERVAL_MS=100
+      - BUFFER_SIZE=10485760
+      - PUSH_INTERVAL_MS=1000
+      - MAX_RETRIES=5
+      - INITIAL_BACKOFF_MS=100
+      - LOG_LEVEL=info
+
+    # Network configuration
+    networks:
+      - qrng-network
+
+    # Depends on gateway being available (commented out for debugging)
+    # depends_on:
+    #   qrng-gateway:
+    #     condition: service_healthy
+
+    # Health check (monitor logs since no HTTP endpoint)
+    healthcheck:
+      test: ["CMD-SHELL", "pgrep -f qrng-collector || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+    # Logging configuration
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+networks:
+  qrng-network:
+    driver: bridge
+    name: qrng-network
