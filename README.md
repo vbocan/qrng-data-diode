@@ -5,21 +5,21 @@
 
 A high-performance, secure bridge service that exposes Quantum Random Number Generator (QRNG) entropy to external networks using software-based data diode emulation. Implemented in Rust for maximum safety, performance, and reliability.
 
-## 🎯 Overview
+## Overview
 
 This system provides secure access to quantum-generated random numbers from a locally-networked Quantis QRNG appliance, designed for academic research, cryptographic applications, and scientific computing. It addresses network restrictions through a split architecture that emulates unidirectional data flow, inspired by hardware data diodes.
 
 ### Key Features
 
-- **🔐 Software Data Diode**: Unidirectional entropy flow from internal to external networks
-- **🚀 High Performance**: Lock-free buffers, zero-copy operations, async I/O
-- **🛡️ Cryptographic Integrity**: HMAC-SHA256 signing + CRC32 checksums
-- **📊 Production Ready**: Comprehensive metrics, structured logging, health checks
-- **🤖 AI Integration**: Model Context Protocol (MCP) server for AI agents
-- **🧪 Quality Validation**: Built-in Monte Carlo π estimation for randomness verification
-- **📦 Flexible Deployment**: Push-based (data diode) or direct access modes
+- **Software Data Diode**: Unidirectional entropy flow from internal to external networks
+- **High Performance**: Lock-free buffers, zero-copy operations, async I/O
+- **Cryptographic Integrity**: HMAC-SHA256 signing + CRC32 checksums
+- **Production Ready**: Comprehensive metrics, structured logging, health checks
+- **AI Integration**: Model Context Protocol (MCP) server for AI agents
+- **Quality Validation**: Built-in Monte Carlo π estimation for randomness verification
+- **Flexible Deployment**: Push-based (data diode) or direct access modes
 
-## 🏗️ Architecture
+## Architecture
 
 ### Push-Based Mode (Data Diode Emulation)
 
@@ -35,8 +35,8 @@ This system provides secure access to quantum-generated random numbers from a lo
 │           │ fetch       │         │           │ REST API    │
 │           ▼             │         │           │             │
 │  ┌──────────────────┐   │         │  ┌────────┴─────────┐   │
-│  │    Entropy       │   │  HTTPS  │  │    Entropy       │   │
-│  │   Collector      │───┼────────>│──│    Gateway       │   │
+│  │      QRNG        │   │  HTTPS  │  │      QRNG        │   │
+│  │    Collector     │───┼────────>│──│     Gateway      │   │
 │  │                  │   │  push   │  │                  │   │
 │  │  - Fetch loop    │   │  (one-  │  │  - REST API      │   │
 │  │  - Buffer (1MB)  │   │   way)  │  │  - Buffer (10MB) │   │
@@ -60,8 +60,8 @@ This system provides secure access to quantum-generated random numbers from a lo
 │           │ fetch                │
 │           ▼                      │
 │  ┌──────────────────┐            │
-│  │    Entropy       │◄───────────┼──── Clients (REST API)
-│  │    Gateway       │            │
+│  │      QRNG        │◄───────────┼──── Clients (REST API)
+│  │     Gateway      │            │
 │  │                  │            │
 │  │  - Fetch loop    │            │
 │  │  - Buffer (10MB) │            │
@@ -71,7 +71,7 @@ This system provides secure access to quantum-generated random numbers from a lo
 └──────────────────────────────────┘
 ```
 
-## 🚀 Quick Start
+## Quick Start
 
 ### Prerequisites
 
@@ -127,21 +127,21 @@ hmac_secret_key: "<same-key-as-collector>"
 #### Push-Based Mode
 
 ```bash
-# Terminal 1: Start Entropy Gateway (external network)
-./target/release/entropy-gateway --config config/gateway-push.yaml
+# Terminal 1: Start QRNG Gateway (external network)
+./target/release/qrng-gateway --config config/gateway-push.yaml
 
-# Terminal 2: Start Entropy Collector (internal network)
-./target/release/entropy-collector --config config/collector.yaml
+# Terminal 2: Start QRNG Collector (internal network)
+./target/release/qrng-collector --config config/collector.yaml
 ```
 
 #### Direct Access Mode
 
 ```bash
 # Single component deployment
-./target/release/entropy-gateway --config config/gateway-direct.yaml
+./target/release/qrng-gateway --config config/gateway-direct.yaml
 ```
 
-## 📡 API Reference
+## API Reference
 
 ### GET /api/random
 
@@ -258,7 +258,7 @@ curl -X POST \
 }
 ```
 
-## 🤖 MCP Server Integration
+## MCP Server Integration
 
 The gateway exposes a Model Context Protocol (MCP) server for AI agent integration.
 
@@ -278,14 +278,14 @@ Add to `claude_desktop_config.json`:
 {
   "mcpServers": {
     "qrng": {
-      "command": "entropy-gateway",
+      "command": "qrng-gateway",
       "args": ["--mcp-mode", "--config", "config/gateway.yaml"]
     }
   }
 }
 ```
 
-## 🛠️ Development
+## Development
 
 ### Project Structure
 
@@ -301,13 +301,13 @@ qrng-data-diode/
 │   │   ├── retry.rs        # Exponential backoff logic
 │   │   └── metrics.rs      # Performance metrics
 │   └── Cargo.toml
-├── entropy-collector/      # Internal component
+├── qrng-collector/         # Internal component
 │   ├── src/main.rs
 │   └── Cargo.toml
-├── entropy-gateway/        # External component
+├── qrng-gateway/           # External component
 │   ├── src/main.rs
 │   └── Cargo.toml
-├── qrng-mcp/              # MCP server implementation
+├── qrng-mcp/               # MCP server implementation
 │   ├── src/lib.rs
 │   └── Cargo.toml
 ├── config/                 # Example configurations
@@ -355,7 +355,7 @@ cargo test test_buffer_operations
 RUST_LOG=debug cargo test
 ```
 
-## 📊 Performance
+## Performance
 
 Benchmarked on: AMD Ryzen 9 5900X, 32GB RAM, NVMe SSD
 
@@ -367,7 +367,7 @@ Benchmarked on: AMD Ryzen 9 5900X, 32GB RAM, NVMe SSD
 | Buffer efficiency | 99.7% |
 | Memory footprint | ~15MB (gateway) |
 
-## 🔒 Security Considerations
+## Security Considerations
 
 1. **HMAC Secret Key**: Use cryptographically secure 256-bit keys
 2. **API Keys**: Rotate regularly, use unique keys per client
@@ -376,7 +376,7 @@ Benchmarked on: AMD Ryzen 9 5900X, 32GB RAM, NVMe SSD
 5. **Rate Limiting**: Adjust limits based on threat model
 6. **Monitoring**: Enable metrics and set up alerts
 
-## 📝 Configuration Guide
+## Configuration Guide
 
 ### Collector Tuning
 
@@ -390,7 +390,7 @@ Benchmarked on: AMD Ryzen 9 5900X, 32GB RAM, NVMe SSD
 - **buffer_ttl**: Set based on acceptable staleness (1 hour typical)
 - **rate_limit_per_second**: Protect against abuse while allowing legitimate use
 
-## 🧪 Randomness Validation
+## Randomness Validation
 
 The system includes built-in quality validation:
 
@@ -407,20 +407,18 @@ curl "https://gateway/api/random?bytes=1048576&encoding=binary" > data.bin
 sts -f data.bin
 ```
 
-## 🐳 Docker Deployment
+## Docker Deployment
 
 Complete Docker deployment for both components on **separate machines**. See the [Docker Deployment Guide](docs/DOCKER_DEPLOYMENT.md) for detailed instructions.
 
-### Architecture
-
-Each component runs on its own physical machine:
-- **Machine A (Internal)**: `entropy-collector` → connects to QRNG appliance
-- **Machine B (External)**: `entropy-gateway` → serves clients
-- **Data Flow**: One-way push from collector to gateway
-
-### Quick Start
-
-**On Internal Machine (Collector):**
+# Runtime stage
+FROM debian:bookworm-slim
+RUN apt-get update && apt-get install -y ca-certificates && rm -rf /var/lib/apt/lists/*
+COPY --from=builder /app/target/release/qrng-gateway /usr/local/bin/
+COPY config/ /etc/qrng/
+EXPOSE 8080
+CMD ["qrng-gateway", "--config", "/etc/qrng/gateway.yaml"]
+```
 
 ```bash
 # Build and run
@@ -484,7 +482,7 @@ This software is designed for academic publication:
   - MCP integration for AI agent accessibility
   - Built-in randomness quality validation
 
-## 🤝 Contributing
+## Contributing
 
 Contributions welcome! Please:
 
@@ -494,25 +492,6 @@ Contributions welcome! Please:
 4. Push to the branch (`git push origin feature/amazing-feature`)
 5. Open a Pull Request
 
-## 📄 License
+## License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## 🙏 Acknowledgments
-
-- Quantis QRNG appliance by ID Quantique
-- Rust async ecosystem (Tokio, Axum)
-- Model Context Protocol by Anthropic
-
-## 📧 Contact
-
-For questions or support:
-- Open an issue on GitHub
-- Email: [your-email]
-- Documentation: [your-docs-site]
-
----
-
-**Built with ❤️ and Rust**
-
-*"True randomness from the quantum realm, securely delivered."*

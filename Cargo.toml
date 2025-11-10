@@ -2,8 +2,8 @@
 resolver = "2"
 members = [
     "qrng-core",
-    "entropy-collector",
-    "entropy-gateway",
+    "qrng-collector",
+    "qrng-gateway",
     "qrng-mcp",
 ]
 
@@ -42,6 +42,7 @@ rand = "0.8"
 
 # Configuration
 config = { version = "0.14", features = ["yaml"] }
+envy = "0.4"
 
 # Logging and Tracing
 tracing = "0.1"
