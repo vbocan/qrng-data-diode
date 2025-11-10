@@ -2,7 +2,7 @@
 # Build from workspace root: docker build -f qrng-collector/Dockerfile -t qrng-collector .
 
 # Stage 1: Builder
-FROM rust:1.75-bookworm AS builder
+FROM rust:bookworm AS builder
 
 # Install build dependencies
 RUN apt-get update && apt-get install -y \
