@@ -62,7 +62,7 @@ services:
     # Environment variables
     environment:      
       - QRNG_APPLIANCE_URL=https://random.cs.upt.ro
-      - QRNG_PUSH_URL=http://qrng-gateway:8080
+      - QRNG_PUSH_URL=http://qrng-gateway:8080/push
       - QRNG_HMAC_SECRET_KEY=5f21dde6f44182da494e698ec24ea3c90df242cfb51a6acbebf28bb377d89a5e
       - QRNG_FETCH_CHUNK_SIZE=1798
       - QRNG_FETCH_INTERVAL_MS=100
