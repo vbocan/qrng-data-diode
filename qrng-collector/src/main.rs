@@ -7,10 +7,10 @@
 //! # Architecture
 //!
 //! ```text
-//! ┌──────────────┐     fetch     ┌──────────────┐     push      ┌──────────────┐
-//! │   Quantis    │ ──────────────>│   Collector  │ ──────────────>│   Gateway    │
-//! │  Appliance   │    (HTTPS)     │   (Buffer)   │   (HTTPS)     │  (External)  │
-//! └──────────────┘                └──────────────┘                └──────────────┘
+//! ┌──────────────┐     fetch     ┌──────────────┐     push       ┌──────────────┐
+//! │   Quantis    │ ─────────────>│   Collector  │ ──────────────>│   Gateway    │
+//! │  Appliance   │    (HTTPS)    │   (Buffer)   │   (HTTPS)      │  (External)  │
+//! └──────────────┘               └──────────────┘                └──────────────┘
 //!       │                               │
 //!       │                               │
 //!    Internal                      Unidirectional
@@ -35,7 +35,6 @@ use qrng_core::{
     metrics::Metrics,
     protocol::EntropyPacket,
 };
-use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::time::interval;
@@ -45,17 +44,9 @@ use tracing::{error, info, warn};
 #[command(name = "qrng-collector")]
 #[command(about = "QRNG Collector - Fetches and pushes quantum random data", long_about = None)]
 struct Args {
-    /// Path to configuration file (ignored if --env-mode is set)
-    #[arg(short, long, default_value = "config/collector.yaml")]
-    config: PathBuf,
-
     /// Log level (trace, debug, info, warn, error)
     #[arg(short, long, default_value = "info")]
     log_level: String,
-
-    /// Load configuration from environment variables instead of file
-    #[arg(long, default_value = "false")]
-    env_mode: bool,
 }
 
 /// Main collector application state
@@ -289,16 +280,10 @@ async fn main() -> Result<()> {
 
     info!("QRNG Collector v{}", env!("CARGO_PKG_VERSION"));
 
-    // Load configuration
-    let config = if args.env_mode {
-        info!("Loading configuration from environment variables");
-        CollectorConfig::from_env()
-            .context("Failed to load configuration from environment")?
-    } else {
-        info!("Loading configuration from file: {:?}", args.config);
-        CollectorConfig::from_file(&args.config)
-            .context("Failed to load configuration from file")?
-    };
+    // Load configuration from environment variables
+    info!("Loading configuration from environment variables");
+    let config = CollectorConfig::from_env()
+        .context("Failed to load configuration from environment")?;
 
     // Create and run collector
     let collector = Arc::new(Collector::new(config)?);

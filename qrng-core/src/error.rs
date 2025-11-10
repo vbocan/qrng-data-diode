@@ -89,9 +89,3 @@ impl From<rmp_serde::decode::Error> for Error {
         Error::Serialization(e.to_string())
     }
 }
-
-impl From<config::ConfigError> for Error {
-    fn from(e: config::ConfigError) -> Self {
-        Error::Config(e.to_string())
-    }
-}

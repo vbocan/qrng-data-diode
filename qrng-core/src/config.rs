@@ -2,7 +2,6 @@
 
 use crate::{Error, Result};
 use serde::{Deserialize, Serialize};
-use std::path::Path;
 use std::time::Duration;
 use url::Url;
 
@@ -58,15 +57,6 @@ impl CollectorConfig {
     pub fn from_env() -> Result<Self> {
         let config: Self = envy::from_env()
             .map_err(|e| Error::Config(format!("Failed to parse environment variables: {}", e)))?;
-        config.validate()?;
-        Ok(config)
-    }
-
-    /// Load configuration from YAML file
-    pub fn from_file(path: impl AsRef<Path>) -> Result<Self> {
-        let content = std::fs::read_to_string(path)?;
-        let config: Self = serde_yaml::from_str(&content)
-            .map_err(|e| Error::Config(format!("Failed to parse YAML: {}", e)))?;
         config.validate()?;
         Ok(config)
     }
@@ -200,15 +190,6 @@ impl GatewayConfig {
             }
         }
 
-        config.validate()?;
-        Ok(config)
-    }
-
-    /// Load configuration from YAML file
-    pub fn from_file(path: impl AsRef<Path>) -> Result<Self> {
-        let content = std::fs::read_to_string(path)?;
-        let config: Self = serde_yaml::from_str(&content)
-            .map_err(|e| Error::Config(format!("Failed to parse YAML: {}", e)))?;
         config.validate()?;
         Ok(config)
     }
