@@ -2,7 +2,7 @@
 # Build from workspace root: docker build -f qrng-gateway/Dockerfile -t qrng-gateway .
 
 # Stage 1: Builder
-FROM rust:1.75-bookworm AS builder
+FROM rust:bookworm AS builder
 
 # Install build dependencies
 RUN apt-get update && apt-get install -y \
@@ -16,6 +16,7 @@ WORKDIR /build
 # Copy workspace files
 COPY Cargo.toml Cargo.lock ./
 COPY qrng-core ./qrng-core
+COPY qrng-collector ./qrng-collector
 COPY qrng-gateway ./qrng-gateway
 COPY qrng-mcp ./qrng-mcp
 
