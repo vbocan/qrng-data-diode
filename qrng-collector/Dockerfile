@@ -17,13 +17,14 @@ WORKDIR /build
 COPY Cargo.toml Cargo.lock ./
 COPY qrng-core ./qrng-core
 COPY qrng-collector ./qrng-collector
+COPY qrng-gateway ./qrng-gateway
 COPY qrng-mcp ./qrng-mcp
 
 # Build release binary
 RUN cargo build --release --bin qrng-collector
 
 # Stage 2: Runtime
-FROM ubuntu:24.04
+FROM debian:bookworm-slim
 
 # Install runtime dependencies
 RUN apt-get update && apt-get install -y \
