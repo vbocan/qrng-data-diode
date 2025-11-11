@@ -80,10 +80,9 @@ openssl rand -hex 32
 
 Edit `qrng-collector/.env` (copy from `.env.example`):
 
-**Single Source:**
 ```bash
-# Quantis Appliance API endpoint (check your appliance manual for exact path)
-QRNG_APPLIANCE_URL=https://quantis-appliance.local/api/random
+# Single Quantis Appliance
+QRNG_APPLIANCE_URLS=https://random.cs.upt.ro/api/2.0/streambytes
 QRNG_PUSH_URL=http://gateway-host:8080/push
 QRNG_HMAC_SECRET_KEY=<your-generated-key>
 ```
@@ -91,16 +90,17 @@ QRNG_HMAC_SECRET_KEY=<your-generated-key>
 **Multiple Sources (recommended for enhanced security):**
 ```bash
 # Use different Quantis appliances or different QRNG sources
-QRNG_APPLIANCE_URLS=https://quantis1.local/api/random,https://quantis2.local/api/random
+QRNG_APPLIANCE_URLS=https://quantis1.local/api/2.0/streambytes,https://quantis2.local/api/2.0/streambytes
 QRNG_MIXING_STRATEGY=xor  # or "hkdf" for better mixing
 QRNG_PUSH_URL=http://gateway-host:8080/push
 QRNG_HMAC_SECRET_KEY=<your-generated-key>
 ```
 
 **Important**: 
-- Use the **API endpoint** (e.g., `/api/random`), NOT the website homepage
-- Verify the endpoint returns binary random data, not HTML
-- Check your Quantis Appliance user manual for the correct API path
+- Use the **API endpoint** (e.g., `/api/2.0/streambytes`), NOT the website homepage
+- Verify the endpoint returns random data via Swagger UI
+- Check your Quantis Appliance documentation for the correct API path
+- For single source, set `QRNG_MIXING_STRATEGY=none` (or omit it)
 
 **Mixing Strategies:**
 - `xor`: Fast XOR-based mixing (good for independent sources)

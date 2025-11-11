@@ -68,18 +68,21 @@ services:
 
     # Environment variables
     environment:      
-      # Single source configuration (uncomment one)
-      # - QRNG_APPLIANCE_URL=https://random.cs.upt.ro/api/2.0/streambytes
-      
-      # Multiple sources configuration (uncomment for multi-source)
-      # Use actual API endpoints from Swagger documentation
-      # Quantis API v2.0: /api/2.0/streambytes returns binary data
+      # QRNG Appliance URLs (comma-separated)
+      # Use actual API endpoints from Swagger documentation:
+      # https://random.cs.upt.ro/swagger/swagger-ui.html
+      # Quantis API v2.0: /api/2.0/streambytes returns JSON array of bytes
       #
-      # Example for dual Quantis appliances:
+      # Single source example:
+      #   - QRNG_APPLIANCE_URLS=https://random.cs.upt.ro/api/2.0/streambytes
+      #
+      # Multiple different sources (recommended):
       #   - QRNG_APPLIANCE_URLS=https://quantis1.local/api/2.0/streambytes,https://quantis2.local/api/2.0/streambytes
       #
-      # For testing with UPT fake twin (same source twice):
+      # Fake twin for testing (same source twice):
       - QRNG_APPLIANCE_URLS=https://random.cs.upt.ro/api/2.0/streambytes,https://random.cs.upt.ro/api/2.0/streambytes
+      
+      # Mixing strategy (required when using multiple sources)
       - QRNG_MIXING_STRATEGY=xor  # or 'hkdf' for key derivation function mixing
       
       # Common settings

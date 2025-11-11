@@ -113,13 +113,12 @@ impl Collector {
         info!("Developed by Valer BOCAN, PhD, CSSLP - www.bocan.ro");
 
         let urls = self.config.get_appliance_urls();
-        if urls.len() == 1 {
-            info!("Appliance URL: {}", urls[0]);
-        } else {
-            info!("Multiple appliances configured: {} sources", urls.len());
-            for (i, url) in urls.iter().enumerate() {
-                info!("  Source {}: {}", i + 1, url);
-            }
+        info!("Configured {} source(s)", urls.len());
+        for (i, url) in urls.iter().enumerate() {
+            info!("  Source {}: {}", i + 1, url);
+        }
+        
+        if urls.len() > 1 {
             info!("Mixing strategy: {:?}", self.config.mixing_strategy);
         }
 

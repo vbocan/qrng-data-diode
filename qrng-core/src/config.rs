@@ -26,12 +26,8 @@ impl Default for MixingStrategy {
 /// Entropy Collector configuration
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct CollectorConfig {
-    /// URL of the QRNG appliance (legacy single source)
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub appliance_url: Option<String>,
-
-    /// URLs of multiple QRNG appliances
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    /// URLs of QRNG appliances (supports single or multiple sources)
+    #[serde(default)]
     pub appliance_urls: Vec<String>,
 
     /// Entropy mixing strategy for multiple sources
@@ -70,20 +66,14 @@ pub struct CollectorConfig {
 }
 
 impl CollectorConfig {
-    /// Get all appliance URLs (handles both legacy single URL and new multi-URL)
+    /// Get all appliance URLs
     pub fn get_appliance_urls(&self) -> Vec<String> {
-        if !self.appliance_urls.is_empty() {
-            self.appliance_urls.clone()
-        } else if let Some(url) = &self.appliance_url {
-            vec![url.clone()]
-        } else {
-            vec![]
-        }
+        self.appliance_urls.clone()
     }
 
     /// Returns true if multiple sources are configured
     pub fn has_multiple_sources(&self) -> bool {
-        self.get_appliance_urls().len() > 1
+        self.appliance_urls.len() > 1
     }
 }
 
@@ -100,14 +90,13 @@ impl CollectorConfig {
     /// Validate configuration
     pub fn validate(&self) -> Result<()> {
         // Validate appliance URLs
-        let urls = self.get_appliance_urls();
-        if urls.is_empty() {
+        if self.appliance_urls.is_empty() {
             return Err(Error::Config(
-                "Must provide at least one appliance URL (appliance_url or appliance_urls)".to_string()
+                "Must provide at least one appliance URL via QRNG_APPLIANCE_URLS".to_string()
             ));
         }
 
-        for url in &urls {
+        for url in &self.appliance_urls {
             Url::parse(url)
                 .map_err(|e| Error::Config(format!("Invalid appliance URL '{}': {}", url, e)))?;
         }
@@ -294,8 +283,7 @@ mod tests {
     #[test]
     fn test_collector_config_validation() {
         let config = CollectorConfig {
-            appliance_url: Some("https://example.com/random".to_string()),
-            appliance_urls: vec![],
+            appliance_urls: vec!["https://example.com/random".to_string()],
             mixing_strategy: MixingStrategy::None,
             fetch_chunk_size: 1024,
             fetch_interval_secs: 5,
@@ -312,7 +300,6 @@ mod tests {
     #[test]
     fn test_multi_source_config() {
         let config = CollectorConfig {
-            appliance_url: None,
             appliance_urls: vec![
                 "https://source1.com/random".to_string(),
                 "https://source2.com/random".to_string(),
