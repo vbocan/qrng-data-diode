@@ -33,6 +33,7 @@ use qrng_core::{
     crypto::PacketSigner,
     fetcher::{EntropyFetcher, FetcherConfig},
     metrics::Metrics,
+    mixer::EntropyMixer,
     protocol::EntropyPacket,
 };
 use std::sync::Arc;
@@ -52,7 +53,8 @@ struct Args {
 /// Main collector application state
 struct Collector {
     config: CollectorConfig,
-    fetcher: EntropyFetcher,
+    fetchers: Vec<EntropyFetcher>,
+    mixer: Option<EntropyMixer>,
     buffer: EntropyBuffer,
     signer: PacketSigner,
     http_client: reqwest::Client,
@@ -67,10 +69,22 @@ impl Collector {
             hex::decode(&config.hmac_secret_key).context("Failed to decode HMAC secret key")?;
         let signer = PacketSigner::new(hmac_key);
 
-        // Create fetcher
-        let fetcher_config =
-            FetcherConfig::new(config.appliance_url.parse()?, config.fetch_chunk_size);
-        let fetcher = EntropyFetcher::new(fetcher_config)?;
+        // Create fetchers for all sources
+        let urls = config.get_appliance_urls();
+        let mut fetchers = Vec::new();
+
+        for url in &urls {
+            let fetcher_config = FetcherConfig::new(url.parse()?, config.fetch_chunk_size);
+            let fetcher = EntropyFetcher::new(fetcher_config)?;
+            fetchers.push(fetcher);
+        }
+
+        // Create mixer if multiple sources
+        let mixer = if config.has_multiple_sources() {
+            Some(EntropyMixer::new(config.mixing_strategy))
+        } else {
+            None
+        };
 
         // Create buffer
         let buffer = EntropyBuffer::new(config.buffer_size);
@@ -82,7 +96,8 @@ impl Collector {
 
         Ok(Self {
             config,
-            fetcher,
+            fetchers,
+            mixer,
             buffer,
             signer,
             http_client,
@@ -96,7 +111,18 @@ impl Collector {
         info!("QRNG Collector v{}", env!("CARGO_PKG_VERSION"));
         info!("The collector runs in the same network as the Quantis Appliance and pushes data to the gateway via unidirectional flow.");
         info!("Developed by Valer BOCAN, PhD, CSSLP - www.bocan.ro");
-        info!("Appliance URL: {}", self.config.appliance_url);
+
+        let urls = self.config.get_appliance_urls();
+        if urls.len() == 1 {
+            info!("Appliance URL: {}", urls[0]);
+        } else {
+            info!("Multiple appliances configured: {} sources", urls.len());
+            for (i, url) in urls.iter().enumerate() {
+                info!("  Source {}: {}", i + 1, url);
+            }
+            info!("Mixing strategy: {:?}", self.config.mixing_strategy);
+        }
+
         info!("Random data is pushed to URL: {}", self.config.push_url);
         info!("Buffer size: {} bytes", self.config.buffer_size);
         info!("Fetch interval: {:?} sec.", self.config.fetch_interval());
@@ -132,32 +158,90 @@ impl Collector {
         Ok(())
     }
 
-    /// Fetch loop: continuously fetch data from appliance
+    /// Fetch loop: continuously fetch data from appliances
     async fn fetch_loop(self: Arc<Self>) {
         let mut ticker = interval(self.config.fetch_interval());
 
         loop {
             ticker.tick().await;
 
-            match self.fetcher.fetch().await {
-                Ok(data) => {
-                    self.metrics.record_fetch(data.len());
+            // Fetch from all sources in parallel
+            let fetch_results = {
+                let mut handles = Vec::new();
+                for (i, fetcher) in self.fetchers.iter().enumerate() {
+                    let fetcher = fetcher.clone();
+                    let handle = tokio::spawn(async move {
+                        (i, fetcher.fetch().await)
+                    });
+                    handles.push(handle);
+                }
 
-                    if let Err(e) = self.buffer.push(data) {
-                        error!("Failed to push to buffer: {}", e);
-                    } else {
-                        info!(
-                            "Fetched data, buffer: {}/{} bytes ({:.1}%)",
-                            self.buffer.len(),
-                            self.buffer.capacity(),
-                            self.buffer.fill_percent()
-                        );
+                let mut results = Vec::new();
+                for handle in handles {
+                    if let Ok(result) = handle.await {
+                        results.push(result);
                     }
                 }
-                Err(e) => {
-                    self.metrics.record_fetch_failure();
-                    error!("Fetch failed: {}", e);
+                results
+            };
+
+            // Process results
+            let mut chunks = Vec::new();
+            let mut failed_sources = Vec::new();
+
+            for (i, result) in fetch_results {
+                match result {
+                    Ok(data) => {
+                        chunks.push(data);
+                    }
+                    Err(e) => {
+                        failed_sources.push((i, e));
+                    }
                 }
+            }
+
+            // Log failures
+            for (i, e) in &failed_sources {
+                warn!("Source {} fetch failed: {}", i + 1, e);
+            }
+
+            // Mix if we have multiple chunks
+            let final_data = if chunks.is_empty() {
+                self.metrics.record_fetch_failure();
+                error!("All sources failed to fetch");
+                continue;
+            } else if chunks.len() == 1 {
+                chunks.into_iter().next().unwrap()
+            } else if let Some(mixer) = &self.mixer {
+                match mixer.mix(&chunks) {
+                    Ok(mixed) => {
+                        info!("Mixed {} sources into {} bytes", chunks.len(), mixed.len());
+                        mixed
+                    }
+                    Err(e) => {
+                        error!("Failed to mix entropy: {}", e);
+                        self.metrics.record_fetch_failure();
+                        continue;
+                    }
+                }
+            } else {
+                // Shouldn't happen, but fallback to first chunk
+                chunks.into_iter().next().unwrap()
+            };
+
+            // Push to buffer
+            let data_len = final_data.len();
+            self.metrics.record_fetch(data_len);
+
+            if let Err(e) = self.buffer.push(final_data) {
+                error!("Failed to push to buffer: {}", e);
+            } else {
+                info!(
+                    "Fetched data, buffer: {}/{} bytes ({:.1}%)",
+                    self.buffer.len(),
+                    self.buffer.capacity(),
+                    self.buffer.fill_percent()
+                );
             }
         }
     }

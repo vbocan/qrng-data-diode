@@ -27,6 +27,7 @@ use qrng_core::{
     metrics::Metrics,
     protocol::{EncodingFormat, EntropyPacket, GatewayStatus, HealthStatus},
 };
+use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use std::time::Instant;
 use tower_http::cors::CorsLayer;
@@ -50,6 +51,21 @@ struct AppState {
     signer: Option<PacketSigner>,
     start_time: Instant,
     rate_limiter: Arc<RateLimiter>,
+}
+
+/// Application error type
+struct AppError(StatusCode, String);
+
+impl IntoResponse for AppError {
+    fn into_response(self) -> Response {
+        (self.0, self.1).into_response()
+    }
+}
+
+impl From<StatusCode> for AppError {
+    fn from(status: StatusCode) -> Self {
+        AppError(status, status.to_string())
+    }
 }
 
 /// Simple token-bucket rate limiter
@@ -237,6 +253,163 @@ async fn get_metrics(State(state): State<AppState>) -> String {
     state.metrics.prometheus_format()
 }
 
+/// Monte Carlo test parameters
+#[derive(Debug, Deserialize)]
+struct MonteCarloParams {
+    #[serde(default = "default_iterations")]
+    iterations: u64,
+    #[serde(default)]
+    api_key: Option<String>,
+}
+
+fn default_iterations() -> u64 {
+    1_000_000
+}
+
+/// Monte Carlo test results
+#[derive(Debug, Serialize)]
+struct MonteCarloResult {
+    estimated_pi: f64,
+    error: f64,
+    error_percent: f64,
+    iterations: u64,
+    convergence_rate: String,
+    quantum_vs_pseudo: Option<PseudoComparison>,
+}
+
+#[derive(Debug, Serialize)]
+struct PseudoComparison {
+    quantum_error: f64,
+    pseudo_error: f64,
+    improvement_factor: f64,
+}
+
+/// POST /api/test/monte-carlo - Run Monte Carlo π estimation test
+async fn monte_carlo_test(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Query(params): Query<MonteCarloParams>,
+) -> Result<Json<MonteCarloResult>, AppError> {
+    // Extract and validate API key
+    let api_key = match params.api_key {
+        Some(ref key) => key.clone(),
+        None => extract_api_key(&headers, &state.config)?,
+    };
+
+    // Rate limiting
+    if !state.rate_limiter.check(&api_key) {
+        return Err(AppError(StatusCode::TOO_MANY_REQUESTS, "Rate limit exceeded".to_string()));
+    }
+
+    // Validate iterations
+    const MAX_ITERATIONS: u64 = 10_000_000;
+    if params.iterations == 0 || params.iterations > MAX_ITERATIONS {
+        return Err(AppError(
+            StatusCode::BAD_REQUEST,
+            format!("iterations must be between 1 and {}", MAX_ITERATIONS),
+        ));
+    }
+
+    info!("Running Monte Carlo test with {} iterations", params.iterations);
+
+    // Generate random floats from quantum source
+    let bytes_needed = (params.iterations * 8) as usize; // 8 bytes per f64
+    let data = state.buffer.pop(bytes_needed).ok_or_else(|| {
+        AppError(
+            StatusCode::INSUFFICIENT_STORAGE,
+            "Insufficient entropy in buffer".to_string(),
+        )
+    })?;
+
+    // Convert bytes to floats in [0,1)
+    let mut floats = Vec::with_capacity(params.iterations as usize);
+    for chunk in data.chunks_exact(8) {
+        let mut bytes = [0u8; 8];
+        bytes.copy_from_slice(chunk);
+        let random_u64 = u64::from_be_bytes(bytes);
+        // Convert to float in [0, 1)
+        let float = (random_u64 as f64) / (u64::MAX as f64);
+        floats.push(float);
+    }
+
+    // Perform Monte Carlo π estimation
+    let quantum_pi = estimate_pi(&floats);
+    let quantum_error = (quantum_pi - std::f64::consts::PI).abs();
+    let quantum_error_percent = (quantum_error / std::f64::consts::PI) * 100.0;
+
+    // Assess convergence rate
+    let convergence_rate = if quantum_error_percent < 0.01 {
+        "excellent".to_string()
+    } else if quantum_error_percent < 0.1 {
+        "good".to_string()
+    } else if quantum_error_percent < 1.0 {
+        "fair".to_string()
+    } else {
+        "poor".to_string()
+    };
+
+    // Compare with pseudo-random (optional, for demonstration)
+    let comparison = if params.iterations <= 1_000_000 {
+        // Generate pseudo-random for comparison
+        use rand::Rng;
+        let mut rng = rand::thread_rng();
+        let pseudo_floats: Vec<f64> = (0..params.iterations)
+            .map(|_| rng.gen::<f64>())
+            .collect();
+        let pseudo_pi = estimate_pi(&pseudo_floats);
+        let pseudo_error = (pseudo_pi - std::f64::consts::PI).abs();
+
+        Some(PseudoComparison {
+            quantum_error,
+            pseudo_error,
+            improvement_factor: if pseudo_error > 0.0 {
+                pseudo_error / quantum_error.max(1e-10)
+            } else {
+                1.0
+            },
+        })
+    } else {
+        None
+    };
+
+    info!(
+        "Monte Carlo test completed: π ≈ {:.6}, error: {:.6} ({:.4}%)",
+        quantum_pi, quantum_error, quantum_error_percent
+    );
+
+    Ok(Json(MonteCarloResult {
+        estimated_pi: quantum_pi,
+        error: quantum_error,
+        error_percent: quantum_error_percent,
+        iterations: params.iterations,
+        convergence_rate,
+        quantum_vs_pseudo: comparison,
+    }))
+}
+
+/// Estimate π using Monte Carlo method
+///
+/// Uses pairs of random numbers as (x, y) coordinates and checks if they fall
+/// inside a unit circle. The ratio of points inside vs total approximates π/4.
+fn estimate_pi(floats: &[f64]) -> f64 {
+    let pairs = floats.len() / 2;
+    let mut inside_circle = 0u64;
+
+    for i in 0..pairs {
+        let x = floats[i * 2];
+        let y = floats[i * 2 + 1];
+
+        // Check if point (x, y) is inside unit circle
+        if x * x + y * y <= 1.0 {
+            inside_circle += 1;
+        }
+    }
+
+    // π/4 ≈ inside_circle / total_points
+    // π ≈ 4 * inside_circle / total_points
+    4.0 * (inside_circle as f64) / (pairs as f64)
+}
+
 /// POST /push - Receive entropy packets (push mode only)
 async fn receive_push(
     State(state): State<AppState>,
@@ -358,6 +531,7 @@ async fn main() -> Result<()> {
     let app = Router::new()
         .route("/api/random", get(serve_random))
         .route("/api/status", get(get_status))
+        .route("/api/test/monte-carlo", post(monte_carlo_test))
         .route("/health", get(health_check))
         .route("/metrics", get(get_metrics))
         .route("/push", post(receive_push))

@@ -33,6 +33,7 @@ impl FetcherConfig {
 }
 
 /// HTTP client for fetching entropy from QRNG appliance
+#[derive(Clone)]
 pub struct EntropyFetcher {
     client: Client,
     config: FetcherConfig,

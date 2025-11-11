@@ -5,48 +5,92 @@ use serde::{Deserialize, Serialize};
 use std::time::Duration;
 use url::Url;
 
+/// Entropy mixing strategy
+#[derive(Debug, Clone, Copy, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum MixingStrategy {
+    /// No mixing - use single source only
+    None,
+    /// XOR all sources together
+    Xor,
+    /// Use HKDF (HMAC-based Key Derivation Function) for mixing
+    Hkdf,
+}
+
+impl Default for MixingStrategy {
+    fn default() -> Self {
+        Self::None
+    }
+}
+
 /// Entropy Collector configuration
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct CollectorConfig {
-    /// URL of the QRNG appliance
-    pub appliance_url: String,
-    
+    /// URL of the QRNG appliance (legacy single source)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub appliance_url: Option<String>,
+
+    /// URLs of multiple QRNG appliances
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub appliance_urls: Vec<String>,
+
+    /// Entropy mixing strategy for multiple sources
+    #[serde(default)]
+    pub mixing_strategy: MixingStrategy,
+
     /// Bytes to fetch per request
     #[serde(default = "default_chunk_size")]
     pub fetch_chunk_size: usize,
-    
-    /// Fetch interval in milliseconds
-    #[serde(default = "default_fetch_interval_ms")]
-    pub fetch_interval_ms: u64,
-    
+
+    /// Fetch interval in seconds
+    #[serde(default = "default_fetch_interval")]
+    pub fetch_interval_secs: u64,
+
     /// Internal buffer size in bytes
     #[serde(default = "default_buffer_size")]
     pub buffer_size: usize,
-    
+
     /// URL of Entropy Gateway push endpoint
     pub push_url: String,
-    
-    /// Push interval in milliseconds
-    #[serde(default = "default_push_interval_ms")]
-    pub push_interval_ms: u64,
-    
+
+    /// Push interval in seconds
+    #[serde(default = "default_push_interval")]
+    pub push_interval_secs: u64,
+
     /// HMAC secret key (hex-encoded)
     pub hmac_secret_key: String,
-    
+
     /// Maximum retry attempts
     #[serde(default = "default_max_retries")]
     pub max_retries: u32,
-    
+
     /// Initial backoff in milliseconds
     #[serde(default = "default_initial_backoff_ms")]
     pub initial_backoff_ms: u64,
 }
 
 impl CollectorConfig {
+    /// Get all appliance URLs (handles both legacy single URL and new multi-URL)
+    pub fn get_appliance_urls(&self) -> Vec<String> {
+        if !self.appliance_urls.is_empty() {
+            self.appliance_urls.clone()
+        } else if let Some(url) = &self.appliance_url {
+            vec![url.clone()]
+        } else {
+            vec![]
+        }
+    }
+
+    /// Returns true if multiple sources are configured
+    pub fn has_multiple_sources(&self) -> bool {
+        self.get_appliance_urls().len() > 1
+    }
+}
+
+impl CollectorConfig {
     /// Load configuration from environment variables
     pub fn from_env() -> Result<Self> {
-        let config: Self = envy::prefixed("QRNG_")
-            .from_env()
+        let config: Self = envy::from_env()
             .map_err(|e| Error::Config(format!("Failed to parse environment variables: {}", e)))?;
         config.validate()?;
         Ok(config)
@@ -54,11 +98,29 @@ impl CollectorConfig {
 
     /// Validate configuration
     pub fn validate(&self) -> Result<()> {
-        // Validate URLs
-        Url::parse(&self.appliance_url)
-            .map_err(|e| Error::Config(format!("Invalid appliance_url: {}", e)))?;
+        // Validate appliance URLs
+        let urls = self.get_appliance_urls();
+        if urls.is_empty() {
+            return Err(Error::Config(
+                "Must provide at least one appliance URL (appliance_url or appliance_urls)".to_string()
+            ));
+        }
+
+        for url in &urls {
+            Url::parse(url)
+                .map_err(|e| Error::Config(format!("Invalid appliance URL '{}': {}", url, e)))?;
+        }
+
+        // Validate push URL
         Url::parse(&self.push_url)
             .map_err(|e| Error::Config(format!("Invalid push_url: {}", e)))?;
+
+        // Validate mixing strategy
+        if self.has_multiple_sources() && self.mixing_strategy == MixingStrategy::None {
+            return Err(Error::Config(
+                "Multiple sources configured but mixing_strategy is 'none'. Set to 'xor' or 'hkdf'".to_string()
+            ));
+        }
 
         // Validate sizes
         if self.fetch_chunk_size == 0 || self.fetch_chunk_size > crate::MAX_REQUEST_SIZE {
@@ -83,11 +145,11 @@ impl CollectorConfig {
     }
 
     pub fn fetch_interval(&self) -> Duration {
-        Duration::from_millis(self.fetch_interval_ms)
+        Duration::from_secs(self.fetch_interval_secs)
     }
 
     pub fn push_interval(&self) -> Duration {
-        Duration::from_millis(self.push_interval_ms)
+        Duration::from_secs(self.push_interval_secs)
     }
 }
 
@@ -139,9 +201,9 @@ pub struct DirectModeConfig {
     #[serde(default = "default_chunk_size")]
     pub fetch_chunk_size: usize,
     
-    /// Fetch interval in milliseconds
-    #[serde(default = "default_fetch_interval_ms")]
-    pub fetch_interval_ms: u64,
+    /// Fetch interval in seconds
+    #[serde(default = "default_fetch_interval")]
+    pub fetch_interval_secs: u64,
 }
 
 impl GatewayConfig {
@@ -196,12 +258,12 @@ fn default_gateway_buffer_size() -> usize {
     crate::DEFAULT_BUFFER_SIZE
 }
 
-fn default_fetch_interval_ms() -> u64 {
-    5000 // 5 seconds in ms
+fn default_fetch_interval() -> u64 {
+    5
 }
 
-fn default_push_interval_ms() -> u64 {
-    10000 // 10 seconds in ms
+fn default_push_interval() -> u64 {
+    10
 }
 
 fn default_max_retries() -> u32 {
@@ -231,7 +293,9 @@ mod tests {
     #[test]
     fn test_collector_config_validation() {
         let config = CollectorConfig {
-            appliance_url: "https://example.com/random".to_string(),
+            appliance_url: Some("https://example.com/random".to_string()),
+            appliance_urls: vec![],
+            mixing_strategy: MixingStrategy::None,
             fetch_chunk_size: 1024,
             fetch_interval_secs: 5,
             buffer_size: 10240,
@@ -242,6 +306,29 @@ mod tests {
             initial_backoff_ms: 100,
         };
         assert!(config.validate().is_ok());
+    }
+
+    #[test]
+    fn test_multi_source_config() {
+        let config = CollectorConfig {
+            appliance_url: None,
+            appliance_urls: vec![
+                "https://source1.com/random".to_string(),
+                "https://source2.com/random".to_string(),
+            ],
+            mixing_strategy: MixingStrategy::Xor,
+            fetch_chunk_size: 1024,
+            fetch_interval_secs: 5,
+            buffer_size: 10240,
+            push_url: "https://gateway.com/push".to_string(),
+            push_interval_secs: 10,
+            hmac_secret_key: "secret123".to_string(),
+            max_retries: 5,
+            initial_backoff_ms: 100,
+        };
+        assert!(config.validate().is_ok());
+        assert!(config.has_multiple_sources());
+        assert_eq!(config.get_appliance_urls().len(), 2);
     }
 
     #[test]
