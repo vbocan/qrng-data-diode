@@ -1,23 +1,3 @@
-# Docker Compose for QRNG Data Diode - Combined Deployment
-# Run both collector and gateway on the same machine
-#
-# Usage:
-#   docker compose up -d          # Start both services
-#   docker compose logs -f        # View logs
-#   docker compose down           # Stop services
-#
-# Configuration:
-#   For single source:
-#     - Set QRNG_APPLIANCE_URL to the appliance endpoint
-#   For multiple sources:
-#     - Set QRNG_APPLIANCE_URLS to a comma-separated list of URLs
-#     - Set QRNG_MIXING_STRATEGY to 'xor' or 'hkdf'
-#
-# Before running:
-#   1. Copy qrng-collector/.env.example to qrng-collector/.env and configure
-#   2. Copy qrng-gateway/.env.example to qrng-gateway/.env and configure
-#   3. Ensure HMAC_SECRET_KEY matches in both .env files
-
 services:
   qrng-gateway:
     build:
@@ -68,25 +48,9 @@ services:
     restart: unless-stopped
 
     # Environment variables
-    environment:      
-      # QRNG Appliance URLs (comma-separated)
-      # Use actual API endpoints from Swagger documentation:
-      # https://random.cs.upt.ro/swagger/swagger-ui.html
-      # Quantis API v2.0: /api/2.0/streambytes returns JSON array of bytes
-      #
-      # Single source example:
-      #   - QRNG_APPLIANCE_URLS=https://random.cs.upt.ro/api/2.0/streambytes
-      #
-      # Multiple different sources (recommended):
-      #   - QRNG_APPLIANCE_URLS=https://quantis1.local/api/2.0/streambytes,https://quantis2.local/api/2.0/streambytes
-      #
-      # Single source configuration for throughput optimization:
+    environment:            
       - QRNG_APPLIANCE_URLS=https://random.cs.upt.ro/api/2.0/streambytes
-      
-      # Mixing strategy
       - QRNG_MIXING_STRATEGY=none
-      
-      # Common settings
       - QRNG_PUSH_URL=http://qrng-gateway:8080/push
       - QRNG_HMAC_SECRET_KEY=5f21dde6f44182da494e698ec24ea3c90df242cfb51a6acbebf28bb377d89a5e
       - QRNG_FETCH_CHUNK_SIZE=8192
