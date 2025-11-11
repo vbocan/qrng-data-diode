@@ -1,13 +1,15 @@
 #!/usr/bin/env pwsh
 # QRNG Data Diode - Randomness Quality Test Script
 #
-# This script tests the quantum random number generator and displays quality metrics
-# including Monte Carlo π estimation results.
+# This script waits for the buffer to fill to 100% capacity, then consumes the entire
+# buffer in one burst to perform maximum iterations of Monte Carlo π estimation.
+#
+# This provides the most rigorous randomness quality test possible.
 
 param(
     [string]$GatewayUrl = "http://localhost:8080",
     [string]$ApiKey = "test-key-1234567890",
-    [int]$Iterations = 10000,
+    [int]$PollIntervalSeconds = 5,
     [switch]$Verbose
 )
 
@@ -62,6 +64,25 @@ try {
             Write-Host "    - $warning" -ForegroundColor Yellow
         }
     }
+
+    # Wait for buffer to fill to maximum capacity
+    Write-Host ""
+    Write-Info "Waiting for buffer to reach 100% capacity..."
+    $startTime = Get-Date
+    while ($status.buffer_fill_percent -lt 99.9) {
+        $elapsed = [math]::Round(((Get-Date) - $startTime).TotalSeconds, 0)
+        Write-Host "`r  Buffer: $([math]::Round($status.buffer_fill_percent, 2))% | Waiting ${elapsed}s..." -NoNewline -ForegroundColor Cyan
+        Start-Sleep -Seconds $PollIntervalSeconds
+        $status = Invoke-RestMethod -Uri "$GatewayUrl/api/status" -Headers $headers -Method Get
+    }
+    Write-Host ""
+    Write-Success "Buffer is full! Available: $($status.buffer_bytes_available) bytes"
+
+    # Calculate maximum iterations based on full buffer capacity
+    $bytesPerIteration = 8
+    $Iterations = [math]::Floor($status.buffer_bytes_available / $bytesPerIteration)
+    Write-Metric "Maximum Iterations" "$Iterations (consuming entire buffer in one burst)"
+
 } catch {
     Write-Error "Failed to fetch system status"
     Write-Host "  Error: $($_.Exception.Message)" -ForegroundColor Red
@@ -84,9 +105,9 @@ try {
 
 # Run Monte Carlo π estimation test
 Write-Host ""
-Write-Info "Running Monte Carlo π estimation test..."
+Write-Info "Running Monte Carlo π estimation test with MAXIMUM iterations..."
 Write-Host "  Iterations: $Iterations" -ForegroundColor Gray
-Write-Host "  This will consume $([math]::Round($Iterations * 8 / 1024, 2)) KB from the entropy buffer" -ForegroundColor Gray
+Write-Host "  Consuming: $([math]::Round($Iterations * 8 / 1024 / 1024, 2)) MB from the entropy buffer" -ForegroundColor Gray
 Write-Host ""
 
 try {
