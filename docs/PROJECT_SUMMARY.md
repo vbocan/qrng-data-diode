@@ -118,8 +118,7 @@ qrng-data-diode/
 
 ✅ Three ready-to-use configs:
 - Collector configuration
-- Gateway (push-based mode)
-- Gateway (direct access mode)
+- Gateway configuration
 
 ## 🎯 Design Excellence
 
@@ -196,7 +195,6 @@ struct Collector<State> {
 - REST API with Axum
 - Authentication middleware
 - Rate limiting
-- Direct access mode
 - Status endpoints
 
 ⏳ **MCP Server Implementation**

@@ -1,6 +1,6 @@
 ### Implementation Plan: QRNG Bridge Service
 
-This plan outlines the development phases for creating the two core Rust components: the Entropy Collector (EC) and the Entropy Gateway (EG). The development is structured to prioritize core functionality and allow for iterative addition of advanced features, supporting both push-based (data diode emulation) and direct access deployment modes.
+This plan outlines the development phases for creating the two core Rust components: the Entropy Collector (EC) and the Entropy Gateway (EG). The development is structured to prioritize core functionality and allow for iterative addition of advanced features using push-based (data diode emulation) architecture.
 
 ---
 
@@ -29,8 +29,10 @@ This phase establishes the project structure and defines common components that 
 
 *   **Step 1.3: Configuration Management (in `qrng-core` crate)**
     *   Define `structs` to represent the configuration from a YAML file (Requirement NFR-10).
-    *   **`ECConfig`**: 
-        *   `appliance_url` (target QRNG appliance endpoint)
+    *   **`ECConfig`**:
+        *   `appliance_url` (target QRNG appliance endpoint - legacy single source)
+        *   `appliance_urls` (multiple QRNG appliance endpoints - for aggregation)
+        *   `mixing_strategy` (XOR or HKDF for multi-source aggregation - see [Multi-Source Aggregation](multi-source-aggregation.md))
         *   `fetch_chunk_size` (bytes per request, default 1024)
         *   `fetch_interval` (polling interval in seconds)
         *   `buffer_size` (max accumulation before push)
@@ -38,15 +40,13 @@ This phase establishes the project structure and defines common components that 
         *   `push_interval` (push frequency)
         *   `hmac_secret_key` (shared secret for signing)
         *   `retry_policy` (exponential backoff parameters)
-    *   **`EGConfig`**: 
-        *   `deployment_mode` (enum: `PushBased` or `DirectAccess` - FR-0.11)
+    *   **`EGConfig`**:
         *   `listen_address` (bind address for HTTP server)
         *   `buffer_size` (max bytes, default 10MB - NFR-1)
         *   `buffer_ttl` (data freshness threshold - FR-6)
         *   `api_keys` (list of valid authentication keys)
         *   `rate_limit` (requests per second per client - FR-8)
         *   `hmac_secret_key` (for push mode verification)
-        *   `direct_mode_config` (optional, contains appliance connection details)
         *   `mcp_enabled` (enable MCP server - FR-10)
         *   `metrics_enabled` (expose Prometheus metrics - FR-14)
     *   Implement configuration validation with helpful error messages (NFR-10).
@@ -55,7 +55,7 @@ This phase establishes the project structure and defines common components that 
     *   Create a reusable module for HTTPS GET requests to Quantis appliance (FR-1).
     *   Use `reqwest` with TLS verification and connection pooling.
     *   Implement exponential backoff retry logic with jitter (FR-9).
-    *   This module will be used by both Entropy Collector (always) and Entropy Gateway (direct mode only).
+    *   This module will be used by the Entropy Collector.
 
 ---
 
@@ -103,9 +103,9 @@ This phase focuses on the internal component responsible for fetching and pushin
 
 ### Phase 3: Entropy Gateway (EG) Implementation
 
-This phase focuses on the external component that serves data to clients, supporting both push-based and direct access modes.
+This phase focuses on the external component that serves data to clients via push-based data diode architecture.
 
-*   **Step 3.1: Set Up the Web Server and Data Reception (Push-Based Mode)**
+*   **Step 3.1: Set Up the Web Server and Data Reception**
     *   Use the `axum` web framework with `tokio` runtime to build a high-performance async server (NFR-2).
     *   Create a `POST /push` endpoint to receive data from the EC. This handler will:
         1.  Deserialize the incoming MessagePack data packet.
@@ -117,16 +117,7 @@ This phase focuses on the external component that serves data to clients, suppor
         7.  Return appropriate HTTP status codes (200 OK, 401 Unauthorized, 400 Bad Request).
     *   Implement request size limits and timeout protections (SEC-2, SEC-3).
 
-*   **Step 3.2: Implement Direct Access Mode**
-    *   In `main.rs`, conditionally initialize based on `deployment_mode` configuration (FR-0.11).
-    *   For direct access mode:
-        *   Skip push endpoint initialization.
-        *   Start a fetching loop using the shared fetching module from `qrng-core` crate.
-        *   Directly populate the Entropy Gateway buffer with fetched data (FR-0.6 to FR-0.10).
-        *   Reuse all buffering, API, and security logic from push-based mode.
-    *   Ensure zero-cost abstraction: mode selection happens at startup without runtime overhead.
-
-*   **Step 3.3: Implement Advanced Buffer Management**
+*   **Step 3.2: Implement Advanced Buffer Management**
     *   Create a thread-safe, high-capacity in-memory buffer (default 10MB, configurable - FR-4, NFR-1).
     *   Implement sophisticated FIFO with multiple policies (FR-6):
         *   **Age-based eviction**: Discard data older than configured TTL (e.g., 1 hour).
@@ -137,7 +128,7 @@ This phase focuses on the external component that serves data to clients, suppor
     *   Add buffer compaction/defragmentation to prevent memory fragmentation.
     *   Consider implementing this as a reusable module in `qrng-core` for potential use in both components.
 
-*   **Step 3.4: Implement the Public REST API**
+*   **Step 3.3: Implement the Public REST API**
     *   **`GET /api/random`** (FR-5):
         *   Query parameters: `bytes` (1-65536), `encoding` (hex/base64/binary).
         *   Validates requested size against buffer availability and rate limits.
@@ -148,10 +139,9 @@ This phase focuses on the external component that serves data to clients, suppor
     *   **`GET /api/status`** (FR-5):
         *   Returns comprehensive JSON object:
             *   `status`: "healthy" | "degraded" | "unhealthy"
-            *   `deployment_mode`: "push" | "direct"
             *   `buffer_fill_percent`: current utilization
             *   `buffer_bytes_available`: actual byte count
-            *   `last_data_received`: timestamp (for push mode) or last fetch (for direct mode)
+            *   `last_data_received`: timestamp of last push
             *   `data_freshness_seconds`: age of oldest data in buffer
             *   `uptime_seconds`: service runtime
             *   `total_requests_served`: counter
@@ -162,7 +152,7 @@ This phase focuses on the external component that serves data to clients, suppor
         *   Lightweight endpoint for load balancer/orchestration health checks.
         *   Returns 200 OK if buffer has minimum data threshold, 503 otherwise.
 
-*   **Step 3.5: Implement Security Features**
+*   **Step 3.4: Implement Security Features**
     *   **API Key Authentication** (FR-7, SEC-1):
         *   Create an `axum` middleware for authentication on all `/api/*` routes.
         *   Support header-based (`Authorization: Bearer <key>`) and query parameter (`?api_key=<key>`) methods.
@@ -246,7 +236,6 @@ This final phase adds the innovative extensions and ensures the project is robus
         *   Spin up mock Entropy Collector and Entropy Gateway in test environment.
         *   Test full data pipeline: fetch → accumulate → push → verify → serve.
         *   Simulate network failures and verify retry/recovery logic.
-        *   Test both push-based and direct access modes.
         *   Validate MCP server integration with mock AI agents.
     *   **Security Tests** (NFR-13):
         *   Test authentication bypass attempts.
@@ -261,22 +250,21 @@ This final phase adds the innovative extensions and ensures the project is robus
         *   Profile memory usage and identify leaks.
         *   Stress test: sustained high load for extended periods.
     *   **Randomness Quality Tests** (NFR-12):
-        *   Run standard statistical test suites (DIEHARDER, NIST STS) on served data.
-        *   Verify entropy distribution, autocorrelation, frequency analysis.
+        *   Validate output using Monte Carlo π estimation built into the gateway.
+        *   Verify entropy distribution and statistical properties.
         *   Document results in project README and SoftwareX paper.
 
 *   **Step 4.4: Finalize Documentation and Deployment**
     *   **Core Documentation**:
         *   Create detailed `README.md` with architecture diagrams (NFR-9).
-        *   Document both deployment modes with clear decision matrix.
         *   Provide step-by-step setup guides for Entropy Collector and Entropy Gateway.
         *   Include API reference with OpenAPI/Swagger specs.
         *   Add MCP server usage guide with AI agent examples.
         *   Create troubleshooting guide for common issues.
     *   **Configuration Examples**:
         *   Provide example `config.yaml` files for:
-            *   Push-based mode (Entropy Collector + Entropy Gateway)
-            *   Direct access mode (Entropy Gateway only)
+            *   Entropy Collector configuration
+            *   Entropy Gateway configuration
             *   High-security configurations
             *   High-throughput configurations
         *   Document all configuration parameters with defaults.
@@ -319,7 +307,7 @@ This final phase adds the innovative extensions and ensures the project is robus
 
 *   **Step 5.3: Future Research Directions**
     *   Investigate blockchain integration for entropy provenance.
-    *   Explore federated QRNG networks with multiple appliances.
+    *   **✅ Multi-Source Aggregation** (Implemented): The system now supports federated QRNG networks with multiple appliances. See [Multi-Source Aggregation Guide](multi-source-aggregation.md) for details on parallel fetching, XOR/HKDF mixing, and configuration.
     *   Research quantum-inspired algorithms using served entropy.
     *   Study long-term entropy quality metrics and drift detection.
 
@@ -349,7 +337,7 @@ This final phase adds the innovative extensions and ensures the project is robus
 
 ### Success Criteria
 
-*   ✅ Both deployment modes functional and well-tested
+*   ✅ Push-based deployment functional and well-tested
 *   ✅ REST API meets all functional requirements (FR-5)
 *   ✅ MCP server enables AI agent integration (FR-10-12)
 *   ✅ Security features pass penetration testing (SEC-1-4)

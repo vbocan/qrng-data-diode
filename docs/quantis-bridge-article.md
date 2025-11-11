@@ -26,32 +26,22 @@ This split emulates a software-based data diode, ensuring unidirectional flow (o
 - Support data accumulation to manage appliance constraints.
 - Include innovative features for entropy enhancement and verification.
 - Facilitate a use case demonstration via a Monte Carlo simulation to validate randomness quality.
-- Support dual deployment modes: push-based (data diode emulation) and direct access (simplified architecture).
 - Provide Model Context Protocol (MCP) server interface for AI agent integration.
 - Ensure the design is extensible for research and open-source contributions.
 
 ### 1.3 Scope
-- **In Scope**: Core fetching, pushing, buffering, API exposure; security features; randomness quality testing via Monte Carlo; dual deployment modes; MCP server integration; Rust-specific implementation guidelines.
+- **In Scope**: Core fetching, pushing, buffering, API exposure; security features; randomness quality testing via Monte Carlo; MCP server integration; Rust-specific implementation guidelines.
 - **Out of Scope**: Hardware integration (e.g., physical diodes); full appliance API reverse-engineering; production deployment scripting; non-Rust alternatives.
 
 ## 2. Functional Requirements
-### 2.1 Deployment Modes
-The system shall support two distinct deployment architectures to accommodate different network topologies and security requirements:
+### 2.1 System Architecture
+The system shall use a push-based deployment architecture to provide secure access while maintaining network isolation:
 
-#### 2.1.1 Push-Based Mode (Data Diode Emulation)
 - **FR-0.1**: The system shall support a push-based deployment where Entropy Collector (EC) resides within the restricted network and Entropy Gateway (EG) resides externally.
-- **FR-0.2**: In push-based mode, data flow shall be strictly unidirectional from EC to EG, emulating data diode principles.
+- **FR-0.2**: Data flow shall be strictly unidirectional from EC to EG, emulating data diode principles.
 - **FR-0.3**: Entropy Collector (EC) shall be responsible for fetching, accumulating, and pushing data to Entropy Gateway (EG).
 - **FR-0.4**: Entropy Gateway (EG) shall operate independently without requiring network access to the Quantis appliance.
-- **FR-0.5**: This mode is suitable for high-security environments where internal network isolation is critical.
-
-#### 2.1.2 Direct Access Mode
-- **FR-0.6**: The system shall support a direct access deployment where Entropy Gateway (EG) has direct network access to the Quantis appliance.
-- **FR-0.7**: In direct access mode, Entropy Collector (EC) is not deployed, and Entropy Gateway (EG) directly fetches random data from the appliance.
-- **FR-0.8**: Entropy Gateway (EG) shall implement the same fetching, accumulation, and API exposure logic as in push-based mode.
-- **FR-0.9**: Direct access mode shall be configurable via deployment parameters (e.g., environment variables, configuration files).
-- **FR-0.10**: This mode is suitable for simplified deployments where both the service and appliance reside within the same trusted network boundary or where network restrictions are not a concern.
-- **FR-0.11**: The system architecture shall be designed to allow runtime mode selection without code modification.
+- **FR-0.5**: This architecture is suitable for high-security environments where internal network isolation is critical.
 
 ### 2.2 Core Functionality
 - **FR-1: Data Fetching (Entropy Collector (EC))**: Entropy Collector (EC) shall periodically fetch random data from the Quantis appliance using HTTPS requests (e.g., configurable chunk sizes like 1 KB every 500 ms to respect rate limits).
@@ -63,7 +53,6 @@ The system shall support two distinct deployment architectures to accommodate di
   - `GET /api/status`: Return JSON with buffer levels, last push timestamp, and system health.
   - `POST /api/bulk`: Handle larger requests with parameters (e.g., priority queuing).
 - **FR-6: Buffer Management**: Both components shall implement FIFO buffering with overflow policies (e.g., discard oldest data) and freshness expiration (e.g., discard data older than 5 minutes to ensure quantum freshness).
-- **FR-6.1: Mode-Specific Behavior**: In direct access mode, Entropy Gateway (EG) shall implement the fetching logic internally (equivalent to merging EC and EG functionality).
 
 ### 2.3 Model Context Protocol (MCP) Server Integration
 To enable AI agents and language models to programmatically access quantum random numbers for computational tasks, Entropy Gateway (EG) shall expose an MCP server interface alongside the REST API.
@@ -75,7 +64,7 @@ To enable AI agents and language models to programmatically access quantum rando
   - `get_random_floats`: Request N random floating-point values in [0, 1) or specified range.
   - `get_status`: Query system buffer levels and health metrics.
 - **FR-13: MCP Resources**: The MCP server shall expose resources providing:
-  - System configuration and deployment mode information.
+  - System configuration information.
   - Buffer statistics and entropy quality metrics.
   - Historical usage patterns (if logging enabled).
 - **FR-14: MCP Prompts**: The MCP server shall provide prompt templates for common use cases:
@@ -131,20 +120,12 @@ To enable AI agents and language models to programmatically access quantum rando
 ## 4. Architecture Overview
 ### 4.1 High-Level Design
 
-#### 4.1.1 Push-Based Mode Architecture
-- **Entropy Collector (EC)**: Async Rust app using `tokio` for periodic fetches (`reqwest` to appliance), local buffering (`Vec<u8>` or `bytes` crate), and pushes (e.g., UDP via `tokio::net` or S3 via `rusoto`).
-- **Entropy Gateway (EG)**: `axum`-based server for REST API and MCP server, with `tokio::sync::RwLock` for buffer, receiving pushes via dedicated endpoint or listener.
+#### 4.1.1 System Architecture
+- **Entropy Collector (EC)**: Async Rust app using `tokio` for periodic fetches (`reqwest` to appliance), local buffering (`Vec<u8>` or `bytes` crate), and pushes (HTTP POST to EG).
+- **Entropy Gateway (EG)**: `axum`-based server for REST API and MCP server, with `tokio::sync::RwLock` for buffer, receiving pushes via dedicated endpoint.
 - **Data Flow**: Appliance → EC (fetch/accumulate) → Push (unidirectional) → EG (receive/accumulate/serve) → Clients/AI Agents.
 
-#### 4.1.2 Direct Access Mode Architecture
-- **Entropy Gateway (EG) (Unified)**: Single `axum`-based server that integrates:
-  - Fetching module: Periodic appliance requests using `reqwest`.
-  - Buffer management: Same accumulation logic as push-based EG.
-  - API exposure: REST API and MCP server endpoints.
-- **Data Flow**: Appliance → EG (fetch/accumulate/serve) → Clients/AI Agents.
-- **Configuration**: Mode selected via environment variable (e.g., `DEPLOYMENT_MODE=direct` vs `DEPLOYMENT_MODE=push`).
-
-#### 4.1.3 Shared Components
+#### 4.1.2 Shared Components
 - **Rust Peculiarities**: Leverage ownership for safe buffering; async traits for modularity; crates like `serde` for configs, `ring` for crypto.
 - **MCP Integration**: Use `mcp-server-rs` crate or implement custom MCP protocol handler over stdio/HTTP transport.
 
@@ -156,12 +137,12 @@ To enable AI agents and language models to programmatically access quantum rando
 ## 5. Use Cases
 ### 5.1 Primary Use Case: External Randomness Consumption
 - Actor: External client (e.g., researcher).
-- Steps: Client requests via B's API; B serves from buffer; if low, waits for next push from A (push mode) or fetches directly (direct mode).
+- Steps: Client requests via EG's API; EG serves from buffer; if low, waits for next push from EC.
 - Preconditions: System deployed; buffers initialized.
 - Postconditions: Client receives verifiable quantum randomness.
 
-### 5.1.1 Deployment Mode Selection Use Case
-- **UC-MODE-1: Push-Based Deployment**:
+### 5.2 Deployment Use Case
+- **UC-DEPLOY: System Deployment**:
   - Actor: System administrator.
   - Preconditions: Quantis appliance accessible only from internal network; external server available for Entropy Gateway (EG).
   - Steps:
@@ -171,18 +152,8 @@ To enable AI agents and language models to programmatically access quantum rando
     4. Configure EG to receive and authenticate pushes from EC.
     5. Initialize both components; verify unidirectional data flow.
   - Postconditions: System operates with network isolation; external clients access randomness without appliance visibility.
-  
-- **UC-MODE-2: Direct Access Deployment**:
-  - Actor: System administrator.
-  - Preconditions: Deployment environment has direct network access to Quantis appliance; simplified architecture desired.
-  - Steps:
-    1. Deploy Entropy Gateway (EG) with `DEPLOYMENT_MODE=direct` configuration.
-    2. Configure EG with appliance URL and API credentials.
-    3. EG initializes fetching module and begins accumulating data.
-    4. Expose REST and MCP APIs for client access.
-  - Postconditions: System operates in unified mode; Entropy Collector (EC) is not required; same API interface maintained.
 
-### 5.1.2 AI Agent Integration Use Case
+### 5.3 AI Agent Integration Use Case
 - **UC-MCP-1: AI-Driven Monte Carlo Simulation**:
   - Actor: AI agent (e.g., Claude, GPT-4 with MCP support).
   - Preconditions: MCP server running on Entropy Gateway (EG); agent configured with MCP client.
@@ -216,11 +187,11 @@ To demonstrate the bridge's efficacy and randomness quality, integrate a built-i
     5. Return JSON with estimate, error bounds, and visualizations (e.g., scatter plot data for client rendering).
   - Preconditions: Sufficient buffer data; N configurable (e.g., 10^6 for accuracy).
   - Postconditions: Validates entropy quality (e.g., faster convergence due to true randomness); logs results for SoftwareX benchmarks.
-- **Creativity Extensions**: 
+- **Creativity Extensions**:
   - Multi-run averaging to compute variance.
   - Integrate with physics simulations (e.g., quantum walk models using `qutip` if bridged to Python interop).
   - Gamify: "Quantum Lottery" mode where users simulate draws, proving non-bias.
-- **Rationale**: Monte Carlo tests highlight quantum superiority (e.g., passing statistical tests like DIEHARDER implicitly through better results), providing empirical evidence for the bridge's value in scientific computing.
+- **Rationale**: Monte Carlo tests highlight quantum randomness quality through statistical convergence rates, providing empirical evidence for the bridge's value in scientific computing.
 
 ## 6. Risks and Assumptions
 - **Risks**: Push failures due to network issues (mitigated by queuing); security misconfigurations (mitigated by audits).
@@ -234,12 +205,11 @@ To demonstrate the bridge's efficacy and randomness quality, integrate a built-i
 - MCP: Model Context Protocol - standardized protocol for AI agent tool integration.
 - EC: Entropy Collector - Internal component that fetches and pushes data.
 - EG: Entropy Gateway - External component that receives, buffers, and serves data.
-- Push-Based Mode: Deployment architecture with separated EC and EG for network isolation.
-- Direct Access Mode: Unified deployment where EG directly accesses the Quantis appliance.
 
 ### 7.2 Change History
 - v1.0: Initial draft based on discussions.
-- v1.1: Added dual deployment mode support (push-based and direct access) and MCP server integration for AI agent accessibility.
+- v1.1: Added MCP server integration for AI agent accessibility.
 - v1.2: Renamed Component A to "Entropy Collector (EC)" and Component B to "Entropy Gateway (EG)" for improved semantic clarity.
+- v1.3: Removed direct access mode to simplify architecture and focus on data diode emulation.
 
 This document shall be reviewed and updated iteratively during development. For implementation, proceed to prototyping Entropy Collector (EC) first.
