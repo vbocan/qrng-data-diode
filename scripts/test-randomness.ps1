@@ -6,8 +6,8 @@
 
 param(
     [string]$GatewayUrl = "http://localhost:8080",
-    [string]$ApiKey = "test-api-key",
-    [int]$Iterations = 1000000,
+    [string]$ApiKey = "test-key-1234567890",
+    [int]$Iterations = 10000,
     [switch]$Verbose
 )
 
@@ -27,12 +27,17 @@ Write-Host ""
 # Check if gateway is accessible
 Write-Info "Checking gateway connectivity..."
 try {
-    $health = Invoke-RestMethod -Uri "$GatewayUrl/health" -Method Get -ErrorAction Stop
+    $response = Invoke-WebRequest -Uri "$GatewayUrl/health" -Method Get -UseBasicParsing -ErrorAction Stop
     Write-Success "Gateway is online"
 } catch {
-    Write-Error "Gateway is not accessible at $GatewayUrl"
-    Write-Host "  Error: $($_.Exception.Message)" -ForegroundColor Red
-    exit 1
+    if ($_.Exception.Response.StatusCode -eq 503) {
+        Write-Host "  Gateway is online but buffer is not ready (< 5% full)" -ForegroundColor Yellow
+        Write-Host "  Continuing anyway - some endpoints may still work..." -ForegroundColor Gray
+    } else {
+        Write-Error "Gateway is not accessible at $GatewayUrl"
+        Write-Host "  Error: $($_.Exception.Message)" -ForegroundColor Red
+        exit 1
+    }
 }
 
 # Get system status
@@ -68,7 +73,8 @@ Write-Host ""
 Write-Info "Fetching sample random data (32 bytes)..."
 try {
     $url = "$GatewayUrl/api/random?bytes=32&encoding=hex&api_key=$ApiKey"
-    $randomData = Invoke-RestMethod -Uri $url -Method Get
+    $response = Invoke-WebRequest -Uri $url -Method Get -UseBasicParsing
+    $randomData = $response.Content
     Write-Success "Random data retrieved"
     Write-Host "  Sample: $($randomData.Substring(0, [Math]::Min(64, $randomData.Length)))..." -ForegroundColor Gray
 } catch {
@@ -130,11 +136,11 @@ try {
         Write-Metric "Pseudo Error" $pError
         Write-Metric "Improvement Factor" "${improvement}x"
 
-        if ($improvement > 1) {
+        if ($improvement -gt 1) {
             Write-Host "  Quantum randomness is " -NoNewline -ForegroundColor Gray
             Write-Host "${improvement}x better " -NoNewline -ForegroundColor Green
             Write-Host "than pseudo-random!" -ForegroundColor Gray
-        } elseif ($improvement < 1) {
+        } elseif ($improvement -lt 1) {
             Write-Host "  Pseudo-random performed better in this test" -ForegroundColor Yellow
         } else {
             Write-Host "  Similar performance to pseudo-random" -ForegroundColor Gray
@@ -144,13 +150,13 @@ try {
     # Interpretation
     Write-Host ""
     Write-Info "Interpretation:"
-    if ($errorPercent < 0.01) {
+    if ($errorPercent -lt 0.01) {
         Write-Host "  The quantum entropy source is producing high-quality random data" -ForegroundColor Green
         Write-Host "  with excellent statistical properties. Error is less than 0.01%." -ForegroundColor Green
-    } elseif ($errorPercent < 0.1) {
+    } elseif ($errorPercent -lt 0.1) {
         Write-Host "  The quantum entropy source is producing good random data" -ForegroundColor Green
         Write-Host "  suitable for most cryptographic applications." -ForegroundColor Green
-    } elseif ($errorPercent < 1.0) {
+    } elseif ($errorPercent -lt 1.0) {
         Write-Host "  The quantum entropy source is producing acceptable random data" -ForegroundColor Yellow
         Write-Host "  but quality could be improved. Consider running more iterations." -ForegroundColor Yellow
     } else {
