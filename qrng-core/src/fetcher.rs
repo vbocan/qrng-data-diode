@@ -82,10 +82,10 @@ impl EntropyFetcher {
 
         // Check HTTP status
         if !response.status().is_success() {
-            let status = response.status();
-            let body = response.text().await.unwrap_or_default();
-            warn!("HTTP error {}: {}", status, body);
-            return Err(Error::Validation(format!("HTTP {}: {}", status, body)));
+            let status = response.status();            
+            let reason = status.canonical_reason().unwrap_or("Unknown");
+            warn!("HTTP error {}: {}", status, reason);
+            return Err(Error::Validation(format!("HTTP {} {}", status, reason)));
         }
 
         // Read response body
