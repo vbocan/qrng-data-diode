@@ -11,6 +11,7 @@ path = "src/main.rs"
 
 [dependencies]
 qrng-core = { path = "../qrng-core" }
+qrng-mcp = { path = "../qrng-mcp" }
 tokio = { workspace = true }
 axum = { workspace = true }
 tower = { workspace = true }

@@ -250,19 +250,85 @@ curl -X POST \
 - `fair`: Error < 1.0% (acceptable quality)
 - `poor`: Error ≥ 1.0% (may indicate issues)
 
+### POST /mcp
+
+Access MCP (Model Context Protocol) tools via HTTP for AI agent integration or web applications.
+
+**No authentication required** - This endpoint is open for free access.
+
+**Headers:**
+- `Content-Type: application/json`
+
+**Request Body (JSON-RPC 2.0):**
+
+```json
+{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "method": "tools/call",
+  "params": {
+    "name": "get_random_bytes",
+    "arguments": {
+      "count": 32,
+      "encoding": "hex"
+    }
+  }
+}
+```
+
+**Available Tools:**
+- `get_random_bytes` - Generate random bytes (count: 1-65536, encoding: hex/base64)
+- `get_random_integers` - Generate random integers (count: 1-1000, min, max)
+- `get_random_floats` - Generate random floats 0-1 (count: 1-1000)
+- `get_random_uuid` - Generate UUIDs (count: 1-100)
+- `get_status` - Get system status
+
+**Example:**
+
+```bash
+curl -X POST http://localhost:8080/mcp \
+  -H "Content-Type: application/json" \
+  -d '{
+    "jsonrpc": "2.0",
+    "id": 1,
+    "method": "tools/call",
+    "params": {
+      "name": "get_random_integers",
+      "arguments": {"count": 5, "min": 1, "max": 6}
+    }
+  }'
+```
+
+**Response:**
+
+```json
+{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "result": {
+    "content": [{
+      "type": "text",
+      "text": "[4, 2, 6, 1, 5]"
+    }]
+  }
+}
+```
+
 ## MCP Server Integration
 
-The gateway exposes a Model Context Protocol (MCP) server for AI agent integration.
+The gateway exposes a Model Context Protocol (MCP) server for AI agent integration, accessible both via stdio (for Claude Desktop) and HTTP (for web applications).
 
 ### Available Tools
 
-- `get_random_bytes` - Fetch random bytes
+- `get_random_bytes` - Fetch random bytes (hex/base64)
 - `get_random_integers` - Generate random integers in range
 - `get_random_floats` - Generate random floats in [0,1)
 - `get_random_uuid` - Generate UUID v4
 - `get_status` - Query system status
 
-### Usage Example (Claude Desktop)
+### Usage with Claude Desktop
+
+**Local Setup (gateway on same machine):**
 
 Add to `claude_desktop_config.json`:
 
@@ -276,6 +342,55 @@ Add to `claude_desktop_config.json`:
   }
 }
 ```
+
+**Remote Setup (gateway on Contabo or other remote server):**
+
+Use the MCP client proxy to connect Claude Desktop to a remote gateway:
+
+```json
+{
+  "mcpServers": {
+    "qrng": {
+      "command": "python",
+      "args": [
+        "D:\\path\\to\\qrng-data-diode\\scripts\\mcp_client_proxy.py",
+        "--gateway-url",
+        "https://your-server.com"
+      ]
+    }
+  }
+}
+```
+
+**Note:** The `--api-key` parameter is optional since the MCP endpoint is now open access.
+
+See `docs/REMOTE_MCP_SETUP.md` for complete remote setup instructions.
+
+### Usage via Web/HTTP
+
+Access MCP tools from any HTTP client (no authentication required):
+
+```bash
+curl -X POST http://localhost:8080/mcp \
+  -H "Content-Type: application/json" \
+  -d '{
+    "jsonrpc": "2.0",
+    "id": 1,
+    "method": "tools/call",
+    "params": {
+      "name": "get_random_bytes",
+      "arguments": {"count": 32, "encoding": "hex"}
+    }
+  }'
+```
+
+**Try the interactive web demo:** Open `examples/web_demo.html` in your browser!
+
+For complete web API documentation with examples in JavaScript, Python, Go, Ruby, and more, see:
+- `examples/web_mcp_usage.md` - Web API guide
+- `examples/mcp_usage_example.md` - Claude Desktop guide
+- `examples/web_demo.html` - Interactive demo page
+- `docs/REMOTE_MCP_SETUP.md` - **Remote gateway setup guide**
 
 ## Development
 
