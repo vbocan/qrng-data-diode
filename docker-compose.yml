@@ -6,6 +6,13 @@
 #   docker compose logs -f        # View logs
 #   docker compose down           # Stop services
 #
+# Configuration:
+#   For single source:
+#     - Set QRNG_APPLIANCE_URL to the appliance endpoint
+#   For multiple sources:
+#     - Set QRNG_APPLIANCE_URLS to a comma-separated list of URLs
+#     - Set QRNG_MIXING_STRATEGY to 'xor' or 'hkdf'
+#
 # Before running:
 #   1. Copy qrng-collector/.env.example to qrng-collector/.env and configure
 #   2. Copy qrng-gateway/.env.example to qrng-gateway/.env and configure
@@ -61,11 +68,18 @@ services:
 
     # Environment variables
     environment:      
-      - QRNG_APPLIANCE_URL=https://random.cs.upt.ro
+      # Single source configuration (uncomment one)
+      # - QRNG_APPLIANCE_URL=https://random.cs.upt.ro
+      
+      # Multiple sources configuration (uncomment for multi-source)
+      - QRNG_APPLIANCE_URLS=https://random.cs.upt.ro,https://random.cs.upt.ro
+      - QRNG_MIXING_STRATEGY=xor  # or 'hkdf' for key derivation function mixing
+      
+      # Common settings
       - QRNG_PUSH_URL=http://qrng-gateway:8080/push
       - QRNG_HMAC_SECRET_KEY=5f21dde6f44182da494e698ec24ea3c90df242cfb51a6acbebf28bb377d89a5e
       - QRNG_FETCH_CHUNK_SIZE=1798
-      - QRNG_FETCH_INTERVAL_MS=100
+      - QRNG_FETCH_INTERVAL_MS=5000
       - QRNG_BUFFER_SIZE=10485760
       - QRNG_PUSH_INTERVAL_MS=1000
       - QRNG_MAX_RETRIES=5
