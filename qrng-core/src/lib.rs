@@ -27,6 +27,7 @@ pub mod config;
 pub mod crypto;
 pub mod error;
 pub mod fetcher;
+pub mod mixer;
 pub mod protocol;
 pub mod metrics;
 pub mod retry;
