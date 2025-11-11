@@ -12,16 +12,16 @@ This system provides secure access to quantum-generated random numbers from a lo
 ### Key Features
 
 - **Software Data Diode**: Unidirectional entropy flow from internal to external networks
-- **High Performance**: Lock-free buffers, zero-copy operations, async I/O
+- **Multiple Source Aggregation**: Combine entropy from multiple QRNG appliances with XOR or HKDF mixing
+- **High Performance**: Lock-free buffers, zero-copy operations, async I/O, parallel fetching
 - **Cryptographic Integrity**: HMAC-SHA256 signing + CRC32 checksums
 - **Production Ready**: Comprehensive metrics, structured logging, health checks
 - **AI Integration**: Model Context Protocol (MCP) server for AI agents
 - **Quality Validation**: Built-in Monte Carlo π estimation for randomness verification
-- **Flexible Deployment**: Push-based (data diode) or direct access modes
 
 ## Architecture
 
-### Push-Based Mode (Data Diode Emulation)
+### System Architecture
 
 ```
 ┌─────────────────────────┐         ┌─────────────────────────┐
@@ -44,31 +44,6 @@ This system provides secure access to quantum-generated random numbers from a lo
 │  └──────────────────┘   │         │  │  - Metrics       │   │
 │                         │         │  └──────────────────┘   │
 └─────────────────────────┘         └─────────────────────────┘
-```
-
-### Direct Access Mode (Simplified)
-
-```
-┌──────────────────────────────────┐
-│        Trusted Network           │
-│                                  │
-│  ┌──────────────────┐            │
-│  │  Quantis QRNG    │            │
-│  │    Appliance     │            │
-│  └────────┬─────────┘            │
-│           │ HTTPS                │
-│           │ fetch                │
-│           ▼                      │
-│  ┌──────────────────┐            │
-│  │      QRNG        │◄───────────┼──── Clients (REST API)
-│  │     Gateway      │            │
-│  │                  │            │
-│  │  - Fetch loop    │            │
-│  │  - Buffer (10MB) │            │
-│  │  - REST API      │            │
-│  │  - MCP Server    │            │
-│  └──────────────────┘            │
-└──────────────────────────────────┘
 ```
 
 ## Quick Start
@@ -105,15 +80,31 @@ openssl rand -hex 32
 
 Edit `config/collector.yaml`:
 
+**Single Source:**
 ```yaml
 appliance_url: "https://your-qrng-appliance.example.com/random"
 push_url: "https://your-gateway.example.com/push"
 hmac_secret_key: "<your-generated-key>"
 ```
 
+**Multiple Sources (recommended for enhanced security):**
+```yaml
+appliance_urls:
+  - "https://qrng-source-1.example.com/random"
+  - "https://qrng-source-2.example.com/random"
+  - "https://qrng-source-3.example.com/random"
+mixing_strategy: "xor"  # or "hkdf"
+push_url: "https://your-gateway.example.com/push"
+hmac_secret_key: "<your-generated-key>"
+```
+
+**Mixing Strategies:**
+- `xor`: Fast XOR-based mixing (good for independent sources)
+- `hkdf`: HMAC-based Key Derivation Function (better for correlated sources)
+
 #### 3. Configure Entropy Gateway
 
-Edit `config/gateway-push.yaml`:
+Edit `config/gateway.yaml`:
 
 ```yaml
 listen_address: "0.0.0.0:8080"
@@ -124,21 +115,12 @@ hmac_secret_key: "<same-key-as-collector>"
 
 ### Running
 
-#### Push-Based Mode
-
 ```bash
 # Terminal 1: Start QRNG Gateway (external network)
-./target/release/qrng-gateway --config config/gateway-push.yaml
+./target/release/qrng-gateway --config config/gateway.yaml
 
 # Terminal 2: Start QRNG Collector (internal network)
 ./target/release/qrng-collector --config config/collector.yaml
-```
-
-#### Direct Access Mode
-
-```bash
-# Single component deployment
-./target/release/qrng-gateway --config config/gateway-direct.yaml
 ```
 
 ## API Reference
@@ -196,7 +178,6 @@ curl -H "Authorization: Bearer your-api-key" \
 ```json
 {
   "status": "healthy",
-  "deployment_mode": "push",
   "buffer_fill_percent": 73.5,
   "buffer_bytes_available": 7864320,
   "last_data_received": "2025-11-06T09:15:30Z",
@@ -248,6 +229,7 @@ curl -X POST \
 {
   "estimated_pi": 3.141598,
   "error": 0.000005,
+  "error_percent": 0.0002,
   "iterations": 1000000,
   "convergence_rate": "excellent",
   "quantum_vs_pseudo": {
@@ -257,6 +239,12 @@ curl -X POST \
   }
 }
 ```
+
+**Convergence Rates:**
+- `excellent`: Error < 0.01% (suitable for critical applications)
+- `good`: Error < 0.1% (suitable for most uses)
+- `fair`: Error < 1.0% (acceptable quality)
+- `poor`: Error ≥ 1.0% (may indicate issues)
 
 ## MCP Server Integration
 
@@ -394,17 +382,30 @@ Benchmarked on: AMD Ryzen 9 5900X, 32GB RAM, NVMe SSD
 
 The system includes built-in quality validation:
 
+### PowerShell Test Script (Recommended)
+
+```powershell
+# Run comprehensive test with quality metrics display
+.\test-randomness.ps1 -GatewayUrl "http://localhost:8080" -ApiKey "your-api-key" -Iterations 1000000
+
+# Verbose mode
+.\test-randomness.ps1 -Verbose
+```
+
+The script provides:
+- System status and health metrics
+- Monte Carlo π estimation with quality ratings
+- Quantum vs pseudo-random comparison
+- Visual quality indicators (★★★★★)
+- Detailed interpretation of results
+
+### Manual API Testing
+
 ```bash
 # Run Monte Carlo π estimation
-curl -X POST "https://gateway/api/test/monte-carlo?iterations=10000000"
-
-# External validation with DIEHARDER
-curl "https://gateway/api/random?bytes=10485760&encoding=binary" > random.bin
-dieharder -a -g 201 -f random.bin
-
-# NIST Statistical Test Suite
-curl "https://gateway/api/random?bytes=1048576&encoding=binary" > data.bin
-sts -f data.bin
+curl -X POST \
+  -H "Authorization: Bearer your-api-key" \
+  "https://gateway/api/test/monte-carlo?iterations=10000000"
 ```
 
 ## Docker Deployment
@@ -434,7 +435,7 @@ docker run -d --name entropy-collector \
 # Build and run
 docker build -f Dockerfile.gateway -t qrng-entropy-gateway:latest .
 docker run -d --name entropy-gateway -p 8080:8080 \
-  -v ./config/gateway-push.yaml:/etc/qrng/gateway.yaml:ro \
+  -v ./config/gateway.yaml:/etc/qrng/gateway.yaml:ro \
   qrng-entropy-gateway:latest --config /etc/qrng/gateway.yaml
 ```
 
