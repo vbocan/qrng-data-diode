@@ -38,9 +38,9 @@ pub struct CollectorConfig {
     #[serde(default = "default_chunk_size")]
     pub fetch_chunk_size: usize,
 
-    /// Fetch interval in seconds
-    #[serde(default = "default_fetch_interval")]
-    pub fetch_interval_secs: u64,
+    /// Fetch interval in milliseconds
+    #[serde(default = "default_fetch_interval_ms")]
+    pub fetch_interval_ms: u64,
 
     /// Internal buffer size in bytes
     #[serde(default = "default_buffer_size")]
@@ -49,9 +49,9 @@ pub struct CollectorConfig {
     /// URL of Entropy Gateway push endpoint
     pub push_url: String,
 
-    /// Push interval in seconds
-    #[serde(default = "default_push_interval")]
-    pub push_interval_secs: u64,
+    /// Push interval in milliseconds
+    #[serde(default = "default_push_interval_ms")]
+    pub push_interval_ms: u64,
 
     /// HMAC secret key (hex-encoded)
     pub hmac_secret_key: String,
@@ -80,9 +80,21 @@ impl CollectorConfig {
 impl CollectorConfig {
     /// Load configuration from environment variables
     pub fn from_env() -> Result<Self> {
-        let config: Self = envy::prefixed("QRNG_")
+        let mut config: Self = envy::prefixed("QRNG_")
             .from_env()
             .map_err(|e| Error::Config(format!("Failed to parse environment variables: {}", e)))?;
+        
+        // Handle comma-separated APPLIANCE_URLS if provided as single string
+        if config.appliance_urls.is_empty() {
+            if let Ok(urls_str) = std::env::var("QRNG_APPLIANCE_URLS") {
+                config.appliance_urls = urls_str
+                    .split(',')
+                    .map(|s| s.trim().to_string())
+                    .filter(|s| !s.is_empty())
+                    .collect();
+            }
+        }
+        
         config.validate()?;
         Ok(config)
     }
@@ -135,11 +147,11 @@ impl CollectorConfig {
     }
 
     pub fn fetch_interval(&self) -> Duration {
-        Duration::from_secs(self.fetch_interval_secs)
+        Duration::from_millis(self.fetch_interval_ms)
     }
 
     pub fn push_interval(&self) -> Duration {
-        Duration::from_secs(self.push_interval_secs)
+        Duration::from_millis(self.push_interval_ms)
     }
 }
 
@@ -191,9 +203,9 @@ pub struct DirectModeConfig {
     #[serde(default = "default_chunk_size")]
     pub fetch_chunk_size: usize,
     
-    /// Fetch interval in seconds
-    #[serde(default = "default_fetch_interval")]
-    pub fetch_interval_secs: u64,
+    /// Fetch interval in milliseconds
+    #[serde(default = "default_fetch_interval_ms")]
+    pub fetch_interval_ms: u64,
 }
 
 impl GatewayConfig {
@@ -248,12 +260,12 @@ fn default_gateway_buffer_size() -> usize {
     crate::DEFAULT_BUFFER_SIZE
 }
 
-fn default_fetch_interval() -> u64 {
-    5
+fn default_fetch_interval_ms() -> u64 {
+    100  // 100ms = 10 fetches per second
 }
 
-fn default_push_interval() -> u64 {
-    10
+fn default_push_interval_ms() -> u64 {
+    500  // 500ms = 2 pushes per second
 }
 
 fn default_max_retries() -> u32 {
@@ -286,10 +298,10 @@ mod tests {
             appliance_urls: vec!["https://example.com/random".to_string()],
             mixing_strategy: MixingStrategy::None,
             fetch_chunk_size: 1024,
-            fetch_interval_secs: 5,
+            fetch_interval_ms: 100,
             buffer_size: 10240,
             push_url: "https://gateway.com/push".to_string(),
-            push_interval_secs: 10,
+            push_interval_ms: 500,
             hmac_secret_key: "secret123".to_string(),
             max_retries: 5,
             initial_backoff_ms: 100,
@@ -306,10 +318,10 @@ mod tests {
             ],
             mixing_strategy: MixingStrategy::Xor,
             fetch_chunk_size: 1024,
-            fetch_interval_secs: 5,
+            fetch_interval_ms: 100,
             buffer_size: 10240,
             push_url: "https://gateway.com/push".to_string(),
-            push_interval_secs: 10,
+            push_interval_ms: 500,
             hmac_secret_key: "secret123".to_string(),
             max_retries: 5,
             initial_backoff_ms: 100,
