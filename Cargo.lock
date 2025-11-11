@@ -1357,6 +1357,7 @@ dependencies = [
  "hyper",
  "parking_lot",
  "qrng-core",
+ "qrng-mcp",
  "rand 0.8.5",
  "reqwest",
  "serde",

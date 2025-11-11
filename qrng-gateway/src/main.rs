@@ -27,6 +27,7 @@ use qrng_core::{
     metrics::Metrics,
     protocol::{EncodingFormat, EntropyPacket, GatewayStatus, HealthStatus},
 };
+use qrng_mcp::McpServer;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use std::time::Instant;
@@ -51,6 +52,7 @@ struct AppState {
     signer: Option<PacketSigner>,
     start_time: Instant,
     rate_limiter: Arc<RateLimiter>,
+    mcp_server: Arc<McpServer>,
 }
 
 /// Application error type
@@ -411,6 +413,29 @@ fn estimate_pi(floats: &[f64]) -> f64 {
     4.0 * (inside_circle as f64) / (pairs as f64)
 }
 
+/// POST /mcp - Handle MCP requests over HTTP (no authentication required)
+async fn handle_mcp(
+    State(state): State<AppState>,
+    Json(request): Json<serde_json::Value>,
+) -> Result<Json<serde_json::Value>, AppError> {
+    // MCP endpoint is open - no authentication required
+    // This allows free access for AI agents and applications
+
+    // Convert request to string for MCP handler
+    let request_str = serde_json::to_string(&request)
+        .map_err(|e| AppError(StatusCode::BAD_REQUEST, format!("Invalid JSON: {}", e)))?;
+
+    // Handle MCP request
+    let response_str = state.mcp_server.handle_request(&request_str)
+        .map_err(|e| AppError(StatusCode::INTERNAL_SERVER_ERROR, format!("MCP error: {}", e)))?;
+
+    // Parse response back to JSON
+    let response: serde_json::Value = serde_json::from_str(&response_str)
+        .map_err(|e| AppError(StatusCode::INTERNAL_SERVER_ERROR, format!("Invalid response: {}", e)))?;
+
+    Ok(Json(response))
+}
+
 /// POST /push - Receive entropy packets (push mode only)
 async fn receive_push(
     State(state): State<AppState>,
@@ -518,6 +543,10 @@ async fn main() -> Result<()> {
         None
     };
 
+    // Create MCP server
+    info!("Initializing MCP server");
+    let mcp_server = Arc::new(McpServer::new(buffer.clone()));
+
     // Create application state
     let state = AppState {
         config: config.clone(),
@@ -526,12 +555,14 @@ async fn main() -> Result<()> {
         signer,
         start_time: Instant::now(),
         rate_limiter: Arc::new(RateLimiter::new(config.rate_limit_per_second)),
+        mcp_server,
     };
 
     // Build router
     let app = Router::new()
         .route("/api/random", get(serve_random))
         .route("/api/status", get(get_status))
+        .route("/mcp", post(handle_mcp))
         .route("/api/test/monte-carlo", post(monte_carlo_test))
         .route("/health", get(health_check))
         .route("/metrics", get(get_metrics))
