@@ -483,15 +483,33 @@ async fn receive_push(
     }
 
     // Push to buffer
-    match state.buffer.push(packet.data) {
+    match state.buffer.push(packet.data.clone()) {
         Ok(bytes) => {
-            info!(
-                "Received packet #{}, {} bytes, buffer: {:.1}%",
-                packet.sequence,
-                bytes,
-                state.buffer.fill_percent()
-            );
-            StatusCode::OK
+            if bytes == 0 {
+                warn!(
+                    "Discarded packet #{}, buffer full at {:.1}%",
+                    packet.sequence,
+                    state.buffer.fill_percent()
+                );
+                StatusCode::INSUFFICIENT_STORAGE
+            } else if bytes < packet.data.len() {
+                info!(
+                    "Received packet #{}, stored {} of {} bytes (partial), buffer: {:.1}%",
+                    packet.sequence,
+                    bytes,
+                    packet.data.len(),
+                    state.buffer.fill_percent()
+                );
+                StatusCode::OK
+            } else {
+                info!(
+                    "Received packet #{}, {} bytes, buffer: {:.1}%",
+                    packet.sequence,
+                    bytes,
+                    state.buffer.fill_percent()
+                );
+                StatusCode::OK
+            }
         }
         Err(e) => {
             error!("Failed to push to buffer: {}", e);

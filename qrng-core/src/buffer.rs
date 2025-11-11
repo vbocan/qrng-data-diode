@@ -3,7 +3,7 @@
 //! This module implements a thread-safe, efficient circular buffer for storing
 //! random entropy with automatic age-based eviction and watermark monitoring.
 
-use crate::{Error, Result};
+use crate::Result;
 use bytes::{BufMut, Bytes, BytesMut};
 use chrono::{DateTime, Duration, Utc};
 use parking_lot::RwLock;
@@ -103,32 +103,32 @@ impl EntropyBuffer {
             inner.evict_stale(ttl);
         }
 
-        // Evict old data if buffer would overflow
-        while inner.current_size + data_len > inner.max_size && !inner.entries.is_empty() {
-            if let Some(entry) = inner.entries.pop_front() {
-                inner.current_size -= entry.data.len();
-                inner.stats.evictions_overflow += 1;
-            }
+        // Calculate available space
+        let available_space = inner.max_size.saturating_sub(inner.current_size);
+        
+        // If buffer is full, discard the packet
+        if available_space == 0 {
+            return Ok(0);
         }
 
-        // Don't push if single entry exceeds capacity
-        if data_len > inner.max_size {
-            return Err(Error::Buffer(format!(
-                "Data size {} exceeds buffer capacity {}",
-                data_len, inner.max_size
-            )));
-        }
+        // Determine how much data to push (partial if necessary)
+        let bytes_to_push = data_len.min(available_space);
+        let data_to_push = if bytes_to_push < data_len {
+            data.slice(0..bytes_to_push)
+        } else {
+            data
+        };
 
         // Push new entry
         inner.entries.push_back(BufferEntry {
-            data: data.clone(),
+            data: data_to_push,
             timestamp: Utc::now(),
         });
-        inner.current_size += data_len;
+        inner.current_size += bytes_to_push;
         inner.stats.total_pushes += 1;
-        inner.stats.bytes_pushed += data_len as u64;
+        inner.stats.bytes_pushed += bytes_to_push as u64;
 
-        Ok(data_len)
+        Ok(bytes_to_push)
     }
 
     /// Pop exactly N bytes from buffer (FIFO)
@@ -293,14 +293,25 @@ mod tests {
     }
 
     #[test]
-    fn test_overflow_eviction() {
+    fn test_buffer_full_behavior() {
         let buffer = EntropyBuffer::new(10);
         buffer.push(vec![1; 8]).unwrap();
-        buffer.push(vec![2; 8]).unwrap(); // Should evict first entry
         assert_eq!(buffer.len(), 8);
         
-        let data = buffer.pop(8).unwrap();
-        assert_eq!(data.as_ref(), &[2; 8]);
+        // Next push uses partial data to fill remaining space
+        let pushed = buffer.push(vec![2; 5]).unwrap();
+        assert_eq!(pushed, 2); // Only 2 bytes fit
+        assert_eq!(buffer.len(), 10);
+        
+        // When buffer is full, new packets are discarded
+        let pushed = buffer.push(vec![3; 5]).unwrap();
+        assert_eq!(pushed, 0); // Nothing stored
+        assert_eq!(buffer.len(), 10);
+        
+        // Pop and verify data
+        let data = buffer.pop(10).unwrap();
+        assert_eq!(&data[0..8], &[1; 8]);
+        assert_eq!(&data[8..10], &[2; 2]);
     }
 
     #[test]
