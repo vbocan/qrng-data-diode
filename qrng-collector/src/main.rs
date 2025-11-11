@@ -257,6 +257,19 @@ impl Collector {
                 continue;
             }
 
+            // Only push if buffer is getting full (>80%) or we have a reasonable amount
+            let fill_percent = self.buffer.fill_percent();
+            let min_push_threshold = 80.0; // Push when buffer is 80% full
+            
+            if fill_percent < min_push_threshold {
+                info!(
+                    "Buffer at {:.1}%, waiting until {}% before pushing",
+                    fill_percent,
+                    min_push_threshold
+                );
+                continue;
+            }
+
             if let Err(e) = self.push_buffer().await {
                 error!("Push failed: {}", e);
             }
@@ -265,8 +278,8 @@ impl Collector {
 
     /// Push accumulated data to gateway
     async fn push_buffer(&self) -> Result<()> {
-        // Extract data from buffer
-        let batch_size = self.buffer.len().min(self.config.fetch_chunk_size * 10);
+        // Extract data from buffer - push larger batches (up to 1MB or half the buffer)
+        let batch_size = self.buffer.len().min(1024 * 1024);
         let data = match self.buffer.pop(batch_size) {
             Some(d) => d,
             None => {
