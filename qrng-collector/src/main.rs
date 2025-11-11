@@ -160,9 +160,28 @@ impl Collector {
     /// Fetch loop: continuously fetch data from appliances
     async fn fetch_loop(self: Arc<Self>) {
         let mut ticker = interval(self.config.fetch_interval());
+        const HIGH_WATER_MARK: f64 = 98.0;
 
         loop {
             ticker.tick().await;
+
+            // If buffer is critically full, trigger immediate push
+            let fill_percent = self.buffer.fill_percent();
+            if fill_percent >= HIGH_WATER_MARK {
+                info!("Buffer at {:.1}%, triggering immediate push", fill_percent);
+                let self_clone = Arc::clone(&self);
+                tokio::spawn(async move {
+                    if let Err(e) = self_clone.push_buffer().await {
+                        error!("Emergency push failed: {}", e);
+                    }
+                });
+            }
+
+            // If buffer is completely full, skip fetching to avoid wasted work
+            if fill_percent >= 100.0 {
+                warn!("Buffer full, skipping fetch until space available");
+                continue;
+            }
 
             // Fetch from all sources in parallel
             let fetch_results = {
@@ -248,42 +267,43 @@ impl Collector {
     /// Push loop: periodically push buffered data to gateway
     async fn push_loop(self: Arc<Self>) {
         let mut ticker = interval(self.config.push_interval());
+        const MIN_PUSH_THRESHOLD: f64 = 1.0;  // Minimum 1% to push on interval
 
         loop {
             ticker.tick().await;
 
-            if self.buffer.is_empty() {
-                info!("Buffer empty, skipping push");
-                continue;
-            }
-
-            // Only push if buffer is getting full (>80%) or we have a reasonable amount
             let fill_percent = self.buffer.fill_percent();
-            let min_push_threshold = 80.0; // Push when buffer is 80% full
-            
-            if fill_percent < min_push_threshold {
-                info!(
-                    "Buffer at {:.1}%, waiting until {}% before pushing",
-                    fill_percent,
-                    min_push_threshold
-                );
+
+            if self.buffer.is_empty() {
                 continue;
             }
 
-            if let Err(e) = self.push_buffer().await {
-                error!("Push failed: {}", e);
+            // Push if we have minimum data on regular interval
+            // This ensures low latency when there's active consumption
+            if fill_percent >= MIN_PUSH_THRESHOLD {
+                if let Err(e) = self.push_buffer().await {
+                    error!("Push failed: {}", e);
+                }
             }
         }
     }
 
     /// Push accumulated data to gateway
     async fn push_buffer(&self) -> Result<()> {
-        // Extract data from buffer - push larger batches (up to 1MB or half the buffer)
-        let batch_size = self.buffer.len().min(1024 * 1024);
+        // Calculate batch size dynamically to allow partial packet accumulation
+        // This ensures the gateway buffer can reach 100% regardless of packet/buffer size ratios
+        // Use available data up to 1MB, allowing any size (not constrained to fixed packets)
+        let available = self.buffer.len();
+        if available == 0 {
+            warn!("No data available to push");
+            return Ok(());
+        }
+        
+        let batch_size = available.min(1024 * 1024);
         let data = match self.buffer.pop(batch_size) {
             Some(d) => d,
             None => {
-                warn!("No data available to push");
+                warn!("Failed to pop data from buffer");
                 return Ok(());
             }
         };
