@@ -90,7 +90,20 @@ impl EntropyFetcher {
 
         // Read response body
         let data = response.bytes().await.map_err(Error::Network)?;
-        let data_vec = data.to_vec();
+        
+        // Try to parse as JSON array of integers first (Quantis API v2.0 format)
+        // If that fails, treat as raw binary data
+        let data_vec = match serde_json::from_slice::<Vec<u8>>(&data) {
+            Ok(json_array) => {
+                debug!("Parsed JSON array of {} bytes", json_array.len());
+                json_array
+            }
+            Err(_) => {
+                // Not JSON, use as raw binary
+                debug!("Using raw binary data");
+                data.to_vec()
+            }
+        };
 
         // Validate response
         self.validate_response(&data_vec)?;
@@ -103,9 +116,10 @@ impl EntropyFetcher {
     fn build_request_url(&self) -> Result<Url> {
         let mut url = self.config.base_url.clone();
         
-        // Add query parameter for byte count (adjust based on actual API)
+        // Add query parameter for byte count
+        // Quantis Appliance API v2.0 uses "size" parameter
         url.query_pairs_mut()
-            .append_pair("bytes", &self.config.chunk_size.to_string());
+            .append_pair("size", &self.config.chunk_size.to_string());
         
         Ok(url)
     }
@@ -114,11 +128,11 @@ impl EntropyFetcher {
     fn validate_response(&self, data: &[u8]) -> Result<()> {
         // Check if we got expected amount of data
         if data.len() != self.config.chunk_size {
-            warn!(
+            return Err(Error::Validation(format!(
                 "Received {} bytes, expected {}",
                 data.len(),
                 self.config.chunk_size
-            );
+            )));
         }
 
         // Basic sanity check: ensure we got some data
@@ -126,9 +140,40 @@ impl EntropyFetcher {
             return Err(Error::Validation("Received empty response".to_string()));
         }
 
-        // Optional: Check for obvious non-random patterns (all zeros, all same byte)
+        // Check for HTML content (error pages)
+        if data.len() > 15 {
+            let prefix = &data[0..15];
+            if prefix.starts_with(b"<!doctype html>") ||
+               prefix.starts_with(b"<!DOCTYPE html>") ||
+               prefix.starts_with(b"<html>") {
+                return Err(Error::Validation(
+                    "Received HTML content instead of binary random data".to_string()
+                ));
+            }
+        }
+
+        // Check for obvious non-random patterns (all zeros, all same byte)
         if data.iter().all(|&b| b == data[0]) {
-            warn!("Warning: All bytes have the same value ({})", data[0]);
+            return Err(Error::Validation(format!(
+                "All bytes have the same value (0x{:02X}), not random data",
+                data[0]
+            )));
+        }
+
+        // Check for low entropy (too many repeated bytes)
+        let mut byte_counts = [0u32; 256];
+        for &byte in data {
+            byte_counts[byte as usize] += 1;
+        }
+        
+        // If any single byte appears more than 90% of the time, it's not random
+        let max_count = byte_counts.iter().max().unwrap();
+        let threshold = (data.len() as f64 * 0.9) as u32;
+        if *max_count > threshold {
+            return Err(Error::Validation(format!(
+                "Low entropy detected: one byte value appears {} times out of {} (>90%)",
+                max_count, data.len()
+            )));
         }
 
         Ok(())
@@ -152,7 +197,7 @@ mod tests {
         );
         let fetcher = EntropyFetcher::new(config).unwrap();
         let url = fetcher.build_request_url().unwrap();
-        assert!(url.to_string().contains("bytes=1024"));
+        assert!(url.to_string().contains("size=1024"));
     }
 
     #[test]
@@ -163,11 +208,31 @@ mod tests {
         );
         let fetcher = EntropyFetcher::new(config).unwrap();
         
-        // Valid data
-        let data = vec![1, 2, 3, 4, 5];
-        assert!(fetcher.validate_response(&data).is_ok());
+        // Valid random-looking data with correct size
+        let mut valid_data = vec![0u8; 100];
+        for i in 0..100 {
+            valid_data[i] = (i % 256) as u8; // Varied data
+        }
+        assert!(fetcher.validate_response(&valid_data).is_ok());
         
         // Empty data
         assert!(fetcher.validate_response(&[]).is_err());
+        
+        // Wrong size
+        let wrong_size = vec![1, 2, 3, 4, 5];
+        assert!(fetcher.validate_response(&wrong_size).is_err());
+        
+        // HTML content
+        let html = b"<!doctype html><html><body>Error</body></html>".to_vec();
+        assert!(fetcher.validate_response(&html).is_err());
+        
+        // All same byte (non-random)
+        let all_zeros = vec![0u8; 100];
+        assert!(fetcher.validate_response(&all_zeros).is_err());
+        
+        // Low entropy (90% same byte)
+        let mut low_entropy = vec![42u8; 95];
+        low_entropy.extend_from_slice(&[1, 2, 3, 4, 5]);
+        assert!(fetcher.validate_response(&low_entropy).is_err());
     }
 }
