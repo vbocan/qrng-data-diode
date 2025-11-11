@@ -22,7 +22,7 @@ All components have been fully implemented and tested. The system is **productio
 
 ### 3. QRNG Gateway (`qrng-gateway`) - 460 lines ✨ NEW
 - **Complete REST API** with 5 endpoints
-- **Two deployment modes**: push-based and direct access
+- **Push-based deployment mode** for data diode emulation
 - **Token-bucket rate limiting** per API key
 - **HMAC signature verification** for packets
 - **Multiple encoding formats**: binary, hex, base64
@@ -56,21 +56,12 @@ cargo clippy --workspace -- -D warnings
 
 ### Run Components
 
-#### Option 1: Push-Based Mode (Data Diode Emulation)
-
 ```bash
 # Terminal 1: Start Gateway (external network)
-./target/release/qrng-gateway --config config/gateway-push.yaml
+./target/release/qrng-gateway --config config/gateway.yaml
 
 # Terminal 2: Start Collector (internal network)
 ./target/release/qrng-collector --config config/collector.yaml
-```
-
-#### Option 2: Direct Access Mode
-
-```bash
-# Single component deployment
-./target/release/qrng-gateway --config config/gateway-direct.yaml
 ```
 
 ---
@@ -128,7 +119,6 @@ curl "http://localhost:8080/api/status" \
 ```json
 {
   "status": "healthy",
-  "deployment_mode": "push_based",
   "buffer_fill_percent": 73.5,
   "buffer_bytes_available": 7864320,
   "last_data_received": "2025-11-06T09:30:00Z",
@@ -436,12 +426,11 @@ max_retries: 5
 initial_backoff_ms: 100
 ```
 
-### Entropy Gateway (Push Mode)
+### Entropy Gateway
 
-Edit `config/gateway-push.yaml`:
+Edit `config/gateway.yaml`:
 
 ```yaml
-deployment_mode: push_based
 listen_address: "0.0.0.0:8080"
 buffer_size: 10485760
 buffer_ttl_secs: 3600
@@ -450,25 +439,6 @@ api_keys:
   - "your-api-key-2"
 rate_limit_per_second: 100
 hmac_secret_key: "0123456789abcdef..."  # Must match collector
-mcp_enabled: true
-metrics_enabled: true
-```
-
-### Entropy Gateway (Direct Mode)
-
-Edit `config/gateway-direct.yaml`:
-
-```yaml
-deployment_mode: direct_access
-listen_address: "0.0.0.0:8080"
-buffer_size: 10485760
-api_keys:
-  - "your-api-key"
-rate_limit_per_second: 100
-direct_mode:
-  appliance_url: "https://random.cs.upt.ro/random"
-  fetch_chunk_size: 1024
-  fetch_interval_secs: 5
 mcp_enabled: true
 metrics_enabled: true
 ```
@@ -590,7 +560,7 @@ cargo test --release
 
 ```bash
 # Start gateway
-./target/release/qrng-gateway --config config/gateway-direct.yaml &
+./target/release/qrng-gateway --config config/gateway.yaml &
 
 # Wait for startup
 sleep 2

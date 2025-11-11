@@ -285,33 +285,6 @@ qrng_latency_p99_microseconds 38
 - Pull model adds complexity
 - **But**: Best-in-class monitoring solution
 
-## ADR-012: Direct Access as Alternative Mode
-
-**Status**: Accepted
-
-**Context**: Not all deployments need data diode security.
-
-**Decision**: Support direct access mode as alternative
-
-**Rationale**:
-- **Simplicity**: Single component for simple use cases
-- **Flexibility**: Users choose security vs. simplicity
-- **Testing**: Easier to test single component
-- **Cost**: Lower operational overhead
-
-**Implementation**:
-```rust
-match config.deployment_mode {
-    DeploymentMode::PushBased => start_push_receiver(),
-    DeploymentMode::DirectAccess => start_fetch_loop(),
-}
-```
-
-**Consequences**:
-- More code paths to maintain
-- Need to document trade-offs
-- **But**: Broader applicability
-
 ## Future ADRs (Planned)
 
 ### ADR-013: Monte Carlo Validation Endpoint
