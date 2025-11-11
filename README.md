@@ -78,25 +78,29 @@ openssl rand -hex 32
 
 #### 2. Configure Entropy Collector
 
-Edit `config/collector.yaml`:
+Edit `qrng-collector/.env` (copy from `.env.example`):
 
 **Single Source:**
-```yaml
-appliance_url: "https://your-qrng-appliance.example.com/random"
-push_url: "https://your-gateway.example.com/push"
-hmac_secret_key: "<your-generated-key>"
+```bash
+# Quantis Appliance API endpoint (check your appliance manual for exact path)
+QRNG_APPLIANCE_URL=https://quantis-appliance.local/api/random
+QRNG_PUSH_URL=http://gateway-host:8080/push
+QRNG_HMAC_SECRET_KEY=<your-generated-key>
 ```
 
 **Multiple Sources (recommended for enhanced security):**
-```yaml
-appliance_urls:
-  - "https://qrng-source-1.example.com/random"
-  - "https://qrng-source-2.example.com/random"
-  - "https://qrng-source-3.example.com/random"
-mixing_strategy: "xor"  # or "hkdf"
-push_url: "https://your-gateway.example.com/push"
-hmac_secret_key: "<your-generated-key>"
+```bash
+# Use different Quantis appliances or different QRNG sources
+QRNG_APPLIANCE_URLS=https://quantis1.local/api/random,https://quantis2.local/api/random
+QRNG_MIXING_STRATEGY=xor  # or "hkdf" for better mixing
+QRNG_PUSH_URL=http://gateway-host:8080/push
+QRNG_HMAC_SECRET_KEY=<your-generated-key>
 ```
+
+**Important**: 
+- Use the **API endpoint** (e.g., `/api/random`), NOT the website homepage
+- Verify the endpoint returns binary random data, not HTML
+- Check your Quantis Appliance user manual for the correct API path
 
 **Mixing Strategies:**
 - `xor`: Fast XOR-based mixing (good for independent sources)
