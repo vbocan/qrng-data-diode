@@ -79,7 +79,8 @@ try {
     Write-Success "Buffer is full! Available: $($status.buffer_bytes_available) bytes"
 
     # Calculate maximum iterations based on full buffer capacity
-    $bytesPerIteration = 8
+    # Monte Carlo needs 2 floats per iteration, and each float is 8 bytes
+    $bytesPerIteration = 16
     $Iterations = [math]::Floor($status.buffer_bytes_available / $bytesPerIteration)
     Write-Metric "Maximum Iterations" "$Iterations (consuming entire buffer in one burst)"
 
@@ -107,7 +108,7 @@ try {
 Write-Host ""
 Write-Info "Running Monte Carlo π estimation test with MAXIMUM iterations..."
 Write-Host "  Iterations: $Iterations" -ForegroundColor Gray
-Write-Host "  Consuming: $([math]::Round($Iterations * 8 / 1024 / 1024, 2)) MB from the entropy buffer" -ForegroundColor Gray
+Write-Host "  Consuming: $([math]::Round($Iterations * 16 / 1024 / 1024, 2)) MB from the entropy buffer" -ForegroundColor Gray
 Write-Host ""
 
 try {

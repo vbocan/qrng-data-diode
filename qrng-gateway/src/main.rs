@@ -327,8 +327,9 @@ async fn monte_carlo_test(
         let mut bytes = [0u8; 8];
         bytes.copy_from_slice(chunk);
         let random_u64 = u64::from_be_bytes(bytes);
-        // Convert to float in [0, 1)
-        let float = (random_u64 as f64) / (u64::MAX as f64);
+        // Convert to float in [0, 1) using proper precision
+        // Use only top 53 bits to avoid rounding bias
+        let float = (random_u64 >> 11) as f64 * (1.0 / (1u64 << 53) as f64);
         floats.push(float);
     }
 
