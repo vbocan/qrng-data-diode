@@ -1,76 +1,28 @@
 #!/usr/bin/env pwsh
 <#
 .SYNOPSIS
-    Consume random data from the QRNG Gateway API
+    Generate passwords and UUIDs from QRNG Gateway random data
 
 .DESCRIPTION
-    This script demonstrates how to consume quantum random numbers from the
-    QRNG Gateway. It supports different output formats (hex, base64, binary)
-    and can optionally save the data to a file.
-
-.PARAMETER GatewayUrl
-    The base URL of the QRNG Gateway (default: http://localhost:8080)
-
-.PARAMETER ApiKey
-    The API key for authentication (default: test-key-1234567890)
-
-.PARAMETER Bytes
-    Number of random bytes to request (default: 32, max: 65536)
-
-.PARAMETER Encoding
-    Output encoding format: hex, base64, or binary (default: hex)
-
-.PARAMETER OutputFile
-    Optional file path to save the random data
-
-.PARAMETER Requests
-    Number of requests to make (default: 1). Set to 0 for continuous mode.
-
-.PARAMETER Delay
-    Delay between requests in milliseconds (default: 100)
-
-.PARAMETER ShowStats
-    Display statistics about the received data
-
-.PARAMETER Continuous
-    Run script continuously until interrupted (Ctrl+C)
+    This script continuously generates secure passwords and UUIDs using
+    quantum random numbers from the QRNG Gateway.
 
 .EXAMPLE
     .\consume-random.ps1
-    Get 32 bytes in hex format
-
-.EXAMPLE
-    .\consume-random.ps1 -Bytes 1024 -Encoding base64
-    Get 1024 bytes in base64 format
-
-.EXAMPLE
-    .\consume-random.ps1 -Bytes 256 -OutputFile random.bin -Encoding binary
-    Get 256 bytes and save to file
-
-.EXAMPLE
-    .\consume-random.ps1 -Requests 10 -Delay 500 -ShowStats
-    Make 10 requests with statistics
+    Run continuously generating passwords and UUIDs every 2 seconds
 
 .NOTES
     Author: Valer BOCAN, PhD, CSSLP - www.bocan.ro
     Project: QRNG Data Diode
 #>
 
-param(
-    [string]$GatewayUrl = "http://localhost:8080",
-    [string]$ApiKey = "test-key-1234567890",
-    [ValidateRange(1, 65536)]
-    [int]$Bytes = 32,
-    [ValidateSet("hex", "base64", "binary")]
-    [string]$Encoding = "hex",
-    [string]$OutputFile = "",
-    [ValidateRange(0, 1000)]
-    [int]$Requests = 1,
-    [ValidateRange(0, 10000)]
-    [int]$Delay = 100,
-    [switch]$ShowStats,
-    [switch]$Continuous
-)
+# Hardcoded configuration
+$GatewayUrl = "http://localhost:7764"
+$ApiKey = "test-key-1234567890"
+$PasswordLength = 20
+$PasswordsPerCycle = 3
+$UUIDsPerCycle = 5
+$IntervalSeconds = 2
 
 # Colors for output
 $script:Colors = @{
@@ -118,212 +70,103 @@ function Get-RandomData {
     }
 }
 
-function Get-DataStats {
-    param([string]$Data)
-    
-    if ($Encoding -eq "hex") {
-        # Convert hex to bytes for analysis
-        $hexBytes = $Data -replace '[^0-9A-Fa-f]', ''
-        $byteArray = [byte[]]::new($hexBytes.Length / 2)
-        for ($i = 0; $i -lt $hexBytes.Length; $i += 2) {
-            $byteArray[$i / 2] = [Convert]::ToByte($hexBytes.Substring($i, 2), 16)
-        }
-    }
-    elseif ($Encoding -eq "base64") {
-        $byteArray = [Convert]::FromBase64String($Data)
-    }
-    else {
-        $byteArray = [System.Text.Encoding]::UTF8.GetBytes($Data)
-    }
-    
-    # Calculate basic statistics
-    $sum = 0
-    $min = 255
-    $max = 0
-    
-    foreach ($byte in $byteArray) {
-        $sum += $byte
-        if ($byte -lt $min) { $min = $byte }
-        if ($byte -gt $max) { $max = $byte }
-    }
-    
-    $mean = $sum / $byteArray.Length
-    
-    # Count unique bytes
-    $unique = ($byteArray | Select-Object -Unique).Count
-    
-    return @{
-        Length = $byteArray.Length
-        Mean = [math]::Round($mean, 2)
-        Min = $min
-        Max = $max
-        Unique = $unique
-        Entropy = [math]::Round(($unique / 256.0) * 100, 2)
-    }
-}
-
-function Save-ToFile {
+function New-SecurePassword {
     param(
-        [string]$Data,
-        [string]$Path,
-        [string]$Format
+        [byte[]]$RandomBytes,
+        [int]$Length = 20
     )
     
-    try {
-        if ($Format -eq "binary") {
-            [System.IO.File]::WriteAllBytes($Path, [System.Text.Encoding]::UTF8.GetBytes($Data))
-        }
-        else {
-            Set-Content -Path $Path -Value $Data -NoNewline
-        }
-        return $true
+    $charSets = @{
+        Uppercase = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+        Lowercase = "abcdefghijklmnopqrstuvwxyz"
+        Digits = "0123456789"
+        Special = "!@#$%^&*()-_=+[]{}|;:,.<>?"
     }
-    catch {
-        Write-ColorOutput "Error saving file: $_" -Color $Colors.Error
-        return $false
+    
+    $allChars = $charSets.Uppercase + $charSets.Lowercase + $charSets.Digits + $charSets.Special
+    $password = ""
+    
+    $password += $charSets.Uppercase[$RandomBytes[0] % $charSets.Uppercase.Length]
+    $password += $charSets.Lowercase[$RandomBytes[1] % $charSets.Lowercase.Length]
+    $password += $charSets.Digits[$RandomBytes[2] % $charSets.Digits.Length]
+    $password += $charSets.Special[$RandomBytes[3] % $charSets.Special.Length]
+    
+    for ($i = 4; $i -lt $Length; $i++) {
+        $password += $allChars[$RandomBytes[$i] % $allChars.Length]
     }
+    
+    $chars = $password.ToCharArray()
+    for ($i = $chars.Length - 1; $i -gt 0; $i--) {
+        $j = $RandomBytes[($Length + $i) % $RandomBytes.Length] % ($i + 1)
+        $temp = $chars[$i]
+        $chars[$i] = $chars[$j]
+        $chars[$j] = $temp
+    }
+    
+    return -join $chars
+}
+
+function New-UUID {
+    param([byte[]]$RandomBytes)
+    
+    # Create a copy to avoid modifying the original array
+    $bytes = [byte[]]::new(16)
+    [Array]::Copy($RandomBytes, 0, $bytes, 0, 16)
+    
+    $bytes[6] = ($bytes[6] -band 0x0F) -bor 0x40
+    $bytes[8] = ($bytes[8] -band 0x3F) -bor 0x80
+    
+    $uuid = "{0:x2}{1:x2}{2:x2}{3:x2}-{4:x2}{5:x2}-{6:x2}{7:x2}-{8:x2}{9:x2}-{10:x2}{11:x2}{12:x2}{13:x2}{14:x2}{15:x2}" -f `
+        $bytes[0], $bytes[1], $bytes[2], $bytes[3],
+        $bytes[4], $bytes[5], $bytes[6], $bytes[7],
+        $bytes[8], $bytes[9], $bytes[10], $bytes[11],
+        $bytes[12], $bytes[13], $bytes[14], $bytes[15]
+    
+    return $uuid
 }
 
 # Main execution
-$isContinuous = $Continuous -or $Requests -eq 0
-$requestLimit = if ($isContinuous) { [int]::MaxValue } else { $Requests }
-
-# Enable statistics automatically in continuous mode
-if ($isContinuous) {
-    $ShowStats = $true
-}
-
-Write-ColorOutput "`n=== QRNG Gateway Random Data Consumer ===" -Color $Colors.Info
-if ($isContinuous) {
-    Write-ColorOutput "Mode: CONTINUOUS (Press Ctrl+C to stop)" -Color $Colors.Warning
-} else {
-    Write-ColorOutput "Mode: Standard" -Color $Colors.Info
-}
+Write-ColorOutput "`n=== QRNG Password & UUID Generator ===" -Color $Colors.Info
 Write-ColorOutput "Gateway: $GatewayUrl" -Color $Colors.Info
-Write-ColorOutput "Bytes per request: $Bytes | Encoding: $Encoding`n" -Color $Colors.Info
+Write-ColorOutput "Interval: $IntervalSeconds seconds | Passwords: $PasswordsPerCycle | UUIDs: $UUIDsPerCycle" -Color $Colors.Info
+Write-ColorOutput "Press Ctrl+C to stop`n" -Color $Colors.Warning
 
-$totalBytes = 0
-$successCount = 0
-$failCount = 0
+$cycleCount = 0
 $startTime = Get-Date
-$allData = @()
-$lastStatsUpdate = Get-Date
 
-for ($i = 1; $i -le $requestLimit; $i++) {
-    if (-not $isContinuous) {
-        Write-ColorOutput "[$i/$Requests] Requesting $Bytes bytes..." -Color $Colors.Info
-    }
+while ($true) {
+    $cycleCount++
+    $currentTime = Get-Date
+    $elapsed = ($currentTime - $startTime).TotalSeconds
     
-    $result = Get-RandomData -Url $GatewayUrl -Key $ApiKey -ByteCount $Bytes -Format $Encoding
+    [Console]::Clear()
+    Write-ColorOutput "=== Cycle #$cycleCount | Runtime: $([math]::Round($elapsed, 1))s ===" -Color $Colors.Info
+    Write-ColorOutput "Timestamp: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')`n" -Color $Colors.Data
     
-    if ($result.Success) {
-        $successCount++
-        $totalBytes += $result.Length
-        $allData += $result.Data
+    Write-ColorOutput "Quantum Random Passwords (length: $PasswordLength):" -Color $Colors.Success
+    for ($i = 0; $i -lt $PasswordsPerCycle; $i++) {
+        $result = Get-RandomData -Url $GatewayUrl -Key $ApiKey -ByteCount ($PasswordLength + 16) -Format "binary"
         
-        if (-not $isContinuous) {
-            Write-ColorOutput "  ✓ Success (HTTP $($result.StatusCode)) - Received $($result.Length) bytes" -Color $Colors.Success
-            
-            if ($Requests -eq 1 -or $ShowStats) {
-                # Show preview of data
-                $preview = if ($result.Data.Length -gt 100) {
-                    $result.Data.Substring(0, 100) + "..."
-                } else {
-                    $result.Data
-                }
-                Write-ColorOutput "  Data: $preview" -Color $Colors.Data
-            }
-        }
-    }
-    else {
-        $failCount++
-        if (-not $isContinuous) {
-            Write-ColorOutput "  ✗ Failed (HTTP $($result.StatusCode)) - $($result.Error)" -Color $Colors.Error
+        if ($result.Success) {
+            $password = New-SecurePassword -RandomBytes $result.Data -Length $PasswordLength
+            Write-ColorOutput "  [$($i + 1)] $password" -Color $Colors.Data
+        } else {
+            Write-ColorOutput "  [$($i + 1)] Error: $($result.Error)" -Color $Colors.Error
         }
     }
     
-    # Update real-time stats every 2 seconds in continuous mode
-    if ($isContinuous -and ((Get-Date) - $lastStatsUpdate).TotalSeconds -ge 2) {
-        $currentTime = Get-Date
-        $duration = ($currentTime - $startTime).TotalSeconds
-        $throughput = if ($duration -gt 0) { [math]::Round($totalBytes / $duration, 2) } else { 0 }
+    Write-ColorOutput "`nQuantum Random UUIDs (v4):" -Color $Colors.Success
+    for ($i = 0; $i -lt $UUIDsPerCycle; $i++) {
+        $result = Get-RandomData -Url $GatewayUrl -Key $ApiKey -ByteCount 16 -Format "binary"
         
-        [Console]::Clear()
-        Write-ColorOutput "=== QRNG Gateway - Real-time Statistics ===" -Color $Colors.Info
-        Write-ColorOutput "Gateway: $GatewayUrl | Press Ctrl+C to stop`n" -Color $Colors.Info
-        
-        Write-ColorOutput "Requests:  $successCount successful | $failCount failed | Total: $($successCount + $failCount)" -Color $Colors.Data
-        Write-ColorOutput "Data:      $totalBytes bytes | Duration: $([math]::Round($duration, 1))s | Throughput: $throughput bytes/sec" -Color $Colors.Data
-        Write-ColorOutput "Per req:   $Bytes bytes | Encoding: $Encoding | Delay: $Delay ms`n" -Color $Colors.Data
-        
-        # Show statistics if requested or in continuous mode
-        if (($ShowStats -or $isContinuous) -and $successCount -gt 0) {
-            $combinedData = $allData -join ""
-            $stats = Get-DataStats -Data $combinedData
-            
-            Write-ColorOutput "Statistics (combined data):" -Color $Colors.Info
-            Write-ColorOutput "  Bytes analyzed: $($stats.Length)" -Color $Colors.Data
-            Write-ColorOutput "  Mean value: $($stats.Mean)" -Color $Colors.Data
-            Write-ColorOutput "  Range: $($stats.Min) - $($stats.Max)" -Color $Colors.Data
-            Write-ColorOutput "  Unique bytes: $($stats.Unique)/256 ($($stats.Entropy)% entropy)" -Color $Colors.Data
+        if ($result.Success) {
+            $uuid = New-UUID -RandomBytes $result.Data
+            Write-ColorOutput "  [$($i + 1)] $uuid" -Color $Colors.Data
+        } else {
+            Write-ColorOutput "  [$($i + 1)] Error: $($result.Error)" -Color $Colors.Error
         }
-        
-        $lastStatsUpdate = $currentTime
     }
     
-    if ($i -lt $requestLimit -and $Delay -gt 0) {
-        Start-Sleep -Milliseconds $Delay
-    }
+    Write-ColorOutput "`nNext update in $IntervalSeconds seconds..." -Color $Colors.Info
+    Start-Sleep -Seconds $IntervalSeconds
 }
-
-$endTime = Get-Date
-$duration = ($endTime - $startTime).TotalSeconds
-
-# Display summary (skip in continuous mode on Ctrl+C)
-if (-not $isContinuous) {
-    Write-ColorOutput "`n=== Summary ===" -Color $Colors.Info
-    Write-ColorOutput "Total Requests: $Requests" -Color $Colors.Data
-    Write-ColorOutput "Successful: $successCount" -Color $Colors.Success
-    Write-ColorOutput "Failed: $failCount" -Color $(if ($failCount -gt 0) { $Colors.Error } else { $Colors.Data })
-    Write-ColorOutput "Total Bytes: $totalBytes" -Color $Colors.Data
-    Write-ColorOutput "Duration: $([math]::Round($duration, 2))s" -Color $Colors.Data
-    Write-ColorOutput "Throughput: $([math]::Round($totalBytes / $duration, 2)) bytes/sec" -Color $Colors.Data
-
-    # Show statistics if requested
-    if ($ShowStats -and $successCount -gt 0) {
-        Write-ColorOutput "`n=== Data Statistics ===" -Color $Colors.Info
-        $combinedData = $allData -join ""
-        $stats = Get-DataStats -Data $combinedData
-        
-        Write-ColorOutput "Bytes analyzed: $($stats.Length)" -Color $Colors.Data
-        Write-ColorOutput "Mean value: $($stats.Mean)" -Color $Colors.Data
-        Write-ColorOutput "Min value: $($stats.Min)" -Color $Colors.Data
-        Write-ColorOutput "Max value: $($stats.Max)" -Color $Colors.Data
-        Write-ColorOutput "Unique bytes: $($stats.Unique)/256 ($($stats.Entropy)%)" -Color $Colors.Data
-    }
-} else {
-    # Final summary for continuous mode
-    Write-ColorOutput "`n=== Final Statistics ===" -Color $Colors.Info
-    Write-ColorOutput "Total Requests: $($successCount + $failCount)" -Color $Colors.Data
-    Write-ColorOutput "Successful: $successCount" -Color $Colors.Success
-    Write-ColorOutput "Failed: $failCount" -Color $(if ($failCount -gt 0) { $Colors.Error } else { $Colors.Data })
-    Write-ColorOutput "Total Bytes: $totalBytes" -Color $Colors.Data
-    Write-ColorOutput "Duration: $([math]::Round($duration, 2))s" -Color $Colors.Data
-    Write-ColorOutput "Average Throughput: $([math]::Round($totalBytes / $duration, 2)) bytes/sec" -Color $Colors.Data
-}
-
-# Save to file if specified
-if ($OutputFile -and $successCount -gt 0) {
-    Write-ColorOutput "`n=== Saving to File ===" -Color $Colors.Info
-    $combinedData = $allData -join ""
-    
-    if (Save-ToFile -Data $combinedData -Path $OutputFile -Format $Encoding) {
-        Write-ColorOutput "✓ Saved to: $OutputFile" -Color $Colors.Success
-        Write-ColorOutput "  Size: $(Get-Item $OutputFile | Select-Object -ExpandProperty Length) bytes" -Color $Colors.Data
-    }
-}
-
-Write-ColorOutput ""
-
-# Return exit code based on success
-exit $(if ($failCount -eq 0) { 0 } else { 1 })
