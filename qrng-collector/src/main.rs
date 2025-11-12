@@ -61,6 +61,7 @@ struct Collector {
     metrics: Metrics,
     sequence: Arc<std::sync::atomic::AtomicU64>,
     backoff_until: Arc<tokio::sync::RwLock<Option<std::time::Instant>>>,
+    fetch_backoff_duration: Arc<tokio::sync::RwLock<Duration>>,
 }
 
 impl Collector {
@@ -105,6 +106,7 @@ impl Collector {
             metrics: Metrics::new(),
             sequence: Arc::new(std::sync::atomic::AtomicU64::new(0)),
             backoff_until: Arc::new(tokio::sync::RwLock::new(None)),
+            fetch_backoff_duration: Arc::new(tokio::sync::RwLock::new(Duration::from_secs(1))),
         })
     }
 
@@ -238,11 +240,31 @@ impl Collector {
             // Mix if we have multiple chunks
             let final_data = if chunks.is_empty() {
                 self.metrics.record_fetch_failure();
-                error!("All sources failed to fetch");
+                
+                // Apply exponential backoff when all sources fail
+                let current_backoff = *self.fetch_backoff_duration.read().await;
+                let next_backoff = (current_backoff * 2).min(Duration::from_secs(300)); // Cap at 5 minutes
+                *self.fetch_backoff_duration.write().await = next_backoff;
+                
+                let backoff_until = std::time::Instant::now() + current_backoff;
+                *self.backoff_until.write().await = Some(backoff_until);
+                
+                error!(
+                    "All sources failed to fetch, backing off for {} seconds",
+                    current_backoff.as_secs()
+                );
                 continue;
             } else if chunks.len() == 1 {
+                // Reset backoff on successful fetch
+                *self.fetch_backoff_duration.write().await = Duration::from_secs(1);
+                *self.backoff_until.write().await = None;
+                
                 chunks.into_iter().next().unwrap()
             } else if let Some(mixer) = &self.mixer {
+                // Reset backoff on successful fetch
+                *self.fetch_backoff_duration.write().await = Duration::from_secs(1);
+                *self.backoff_until.write().await = None;
+                
                 match mixer.mix(&chunks) {
                     Ok(mixed) => {
                         info!("Mixed {} sources into {} bytes", chunks.len(), mixed.len());
