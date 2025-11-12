@@ -315,7 +315,8 @@ async fn monte_carlo_test(
     info!("Running Monte Carlo test with {} iterations", params.iterations);
 
     // Generate random floats from quantum source
-    let bytes_needed = (params.iterations * 8) as usize; // 8 bytes per f64
+    // Monte Carlo needs 2 floats (x, y) per iteration
+    let bytes_needed = (params.iterations * 16) as usize; // 16 bytes per iteration (2 × f64)
     let data = state.buffer.pop(bytes_needed).ok_or_else(|| {
         AppError(
             StatusCode::INSUFFICIENT_STORAGE,
@@ -324,7 +325,7 @@ async fn monte_carlo_test(
     })?;
 
     // Convert bytes to floats in [0,1)
-    let mut floats = Vec::with_capacity(params.iterations as usize);
+    let mut floats = Vec::with_capacity((params.iterations * 2) as usize);
     for chunk in data.chunks_exact(8) {
         let mut bytes = [0u8; 8];
         bytes.copy_from_slice(chunk);
@@ -356,7 +357,8 @@ async fn monte_carlo_test(
         // Generate pseudo-random for comparison
         use rand::Rng;
         let mut rng = rand::thread_rng();
-        let pseudo_floats: Vec<f64> = (0..params.iterations)
+        // Need 2 floats per iteration (x, y coordinates)
+        let pseudo_floats: Vec<f64> = (0..(params.iterations * 2))
             .map(|_| rng.gen::<f64>())
             .collect();
         let pseudo_pi = estimate_pi(&pseudo_floats);

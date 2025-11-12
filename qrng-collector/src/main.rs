@@ -60,6 +60,7 @@ struct Collector {
     http_client: reqwest::Client,
     metrics: Metrics,
     sequence: Arc<std::sync::atomic::AtomicU64>,
+    backoff_until: Arc<tokio::sync::RwLock<Option<std::time::Instant>>>,
 }
 
 impl Collector {
@@ -103,6 +104,7 @@ impl Collector {
             http_client,
             metrics: Metrics::new(),
             sequence: Arc::new(std::sync::atomic::AtomicU64::new(0)),
+            backoff_until: Arc::new(tokio::sync::RwLock::new(None)),
         })
     }
 
@@ -164,6 +166,16 @@ impl Collector {
 
         loop {
             ticker.tick().await;
+
+            // Check if we're in backoff period
+            let backoff = self.backoff_until.read().await;
+            if let Some(until) = *backoff {
+                if std::time::Instant::now() < until {
+                    drop(backoff);
+                    continue;
+                }
+            }
+            drop(backoff);
 
             // If buffer is critically full, trigger immediate push
             let fill_percent = self.buffer.fill_percent();
@@ -267,10 +279,20 @@ impl Collector {
     /// Push loop: periodically push buffered data to gateway
     async fn push_loop(self: Arc<Self>) {
         let mut ticker = interval(self.config.push_interval());
-        const MIN_PUSH_THRESHOLD: f64 = 1.0;  // Minimum 1% to push on interval
+        const MIN_PUSH_THRESHOLD: f64 = 1.0;
 
         loop {
             ticker.tick().await;
+
+            // Check if we're in backoff period
+            let backoff = self.backoff_until.read().await;
+            if let Some(until) = *backoff {
+                if std::time::Instant::now() < until {
+                    drop(backoff);
+                    continue;
+                }
+            }
+            drop(backoff);
 
             let fill_percent = self.buffer.fill_percent();
 
@@ -278,8 +300,6 @@ impl Collector {
                 continue;
             }
 
-            // Push if we have minimum data on regular interval
-            // This ensures low latency when there's active consumption
             if fill_percent >= MIN_PUSH_THRESHOLD {
                 if let Err(e) = self.push_buffer().await {
                     error!("Push failed: {}", e);
@@ -342,11 +362,36 @@ impl Collector {
         if response.status().is_success() {
             self.metrics.record_push(packet.payload_size());
             info!("Push successful ({})", response.status());
+            
+            // Clear backoff on success
+            *self.backoff_until.write().await = None;
             Ok(())
         } else {
             self.metrics.record_push_failure();
             let status = response.status();
             let body = response.text().await.unwrap_or_default();
+            
+            // Apply exponential backoff for 507 Insufficient Storage
+            if status == 507 {
+                let backoff_read = self.backoff_until.read().await;
+                let current_backoff = *backoff_read;
+                drop(backoff_read);
+                
+                let backoff_duration = if current_backoff.is_none() {
+                    Duration::from_secs(1)
+                } else {
+                    Duration::from_secs(5)
+                };
+                
+                let backoff_until = std::time::Instant::now() + backoff_duration;
+                *self.backoff_until.write().await = Some(backoff_until);
+                
+                warn!(
+                    "Gateway buffer full (507), backing off for {} seconds",
+                    backoff_duration.as_secs()
+                );
+            }
+            
             error!("Push failed with status {}: {}", status, body);
 
             // Put data back in buffer
