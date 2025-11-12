@@ -7,7 +7,7 @@
 # This provides the most rigorous randomness quality test possible.
 
 param(
-    [string]$GatewayUrl = "http://localhost:8080",
+    [string]$GatewayUrl = "http://localhost:7764",
     [string]$ApiKey = "test-key-1234567890",
     [int]$PollIntervalSeconds = 5,
     [switch]$Verbose
@@ -80,9 +80,12 @@ try {
 
     # Calculate maximum iterations based on full buffer capacity
     # Monte Carlo needs 2 floats per iteration, and each float is 8 bytes
+    # Reserve 1024 bytes for sample data and other requests
     $bytesPerIteration = 16
-    $Iterations = [math]::Floor($status.buffer_bytes_available / $bytesPerIteration)
-    Write-Metric "Maximum Iterations" "$Iterations (consuming entire buffer in one burst)"
+    $reservedBytes = 1024
+    $availableForTest = $status.buffer_bytes_available - $reservedBytes
+    $Iterations = [math]::Floor($availableForTest / $bytesPerIteration)
+    Write-Metric "Maximum Iterations" "$Iterations (consuming $([math]::Round($availableForTest / 1024 / 1024, 2)) MB, reserving $reservedBytes bytes)"
 
 } catch {
     Write-Error "Failed to fetch system status"
@@ -90,21 +93,7 @@ try {
     exit 1
 }
 
-# Fetch sample random data
-Write-Host ""
-Write-Info "Fetching sample random data (32 bytes)..."
-try {
-    $url = "$GatewayUrl/api/random?bytes=32&encoding=hex&api_key=$ApiKey"
-    $response = Invoke-WebRequest -Uri $url -Method Get -UseBasicParsing
-    $randomData = $response.Content
-    Write-Success "Random data retrieved"
-    Write-Host "  Sample: $($randomData.Substring(0, [Math]::Min(64, $randomData.Length)))..." -ForegroundColor Gray
-} catch {
-    Write-Error "Failed to fetch random data"
-    Write-Host "  Error: $($_.Exception.Message)" -ForegroundColor Red
-}
-
-# Run Monte Carlo π estimation test
+# Run Monte Carlo π estimation test (skip sample fetch to preserve buffer)
 Write-Host ""
 Write-Info "Running Monte Carlo π estimation test with MAXIMUM iterations..."
 Write-Host "  Iterations: $Iterations" -ForegroundColor Gray
@@ -119,6 +108,22 @@ try {
 
     Write-Success "Monte Carlo test completed in $($stopwatch.ElapsedMilliseconds)ms"
     Write-Host ""
+    
+    # Fetch sample random data to show after test
+    Write-Info "Fetching sample random data (32 bytes) for display..."
+    try {
+        # Wait a moment for buffer to potentially receive new data
+        Start-Sleep -Milliseconds 500
+        $url = "$GatewayUrl/api/random?bytes=32&encoding=hex&api_key=$ApiKey"
+        $response = Invoke-WebRequest -Uri $url -Method Get -UseBasicParsing -ErrorAction Stop
+        $randomData = $response.Content
+        Write-Host "  Sample: $($randomData.Substring(0, [Math]::Min(64, $randomData.Length)))..." -ForegroundColor Gray
+        Write-Host ""
+    } catch {
+        Write-Host "  (Buffer depleted - test consumed all available entropy)" -ForegroundColor Gray
+        Write-Host "  (Collector is refilling buffer from quantum source...)" -ForegroundColor Gray
+        Write-Host ""
+    }
 
     # Display results
     $piActual = [Math]::PI
