@@ -83,7 +83,7 @@ Edit `qrng-collector/.env` (copy from `.env.example`):
 ```bash
 # Single Quantis Appliance
 QRNG_APPLIANCE_URLS=https://random.cs.upt.ro/api/2.0/streambytes
-QRNG_PUSH_URL=http://gateway-host:8080/push
+QRNG_PUSH_URL=http://gateway-host:7764/push
 QRNG_HMAC_SECRET_KEY=<your-generated-key>
 ```
 
@@ -92,7 +92,7 @@ QRNG_HMAC_SECRET_KEY=<your-generated-key>
 # Use different Quantis appliances or different QRNG sources
 QRNG_APPLIANCE_URLS=https://quantis1.local/api/2.0/streambytes,https://quantis2.local/api/2.0/streambytes
 QRNG_MIXING_STRATEGY=xor  # or "hkdf" for better mixing
-QRNG_PUSH_URL=http://gateway-host:8080/push
+QRNG_PUSH_URL=http://gateway-host:7764/push
 QRNG_HMAC_SECRET_KEY=<your-generated-key>
 ```
 
@@ -111,7 +111,7 @@ QRNG_HMAC_SECRET_KEY=<your-generated-key>
 Edit `config/gateway.yaml`:
 
 ```yaml
-listen_address: "0.0.0.0:8080"
+listen_address: "0.0.0.0:7764"
 api_keys:
   - "your-secure-api-key"
 hmac_secret_key: "<same-key-as-collector>"
@@ -286,7 +286,7 @@ Access MCP (Model Context Protocol) tools via HTTP for AI agent integration or w
 **Example:**
 
 ```bash
-curl -X POST http://localhost:8080/mcp \
+curl -X POST http://localhost:7764/mcp \
   -H "Content-Type: application/json" \
   -d '{
     "jsonrpc": "2.0",
@@ -371,7 +371,7 @@ See `docs/REMOTE_MCP_SETUP.md` for complete remote setup instructions.
 Access MCP tools from any HTTP client (no authentication required):
 
 ```bash
-curl -X POST http://localhost:8080/mcp \
+curl -X POST http://localhost:7764/mcp \
   -H "Content-Type: application/json" \
   -d '{
     "jsonrpc": "2.0",
@@ -505,7 +505,7 @@ The system includes built-in quality validation:
 
 ```powershell
 # Run comprehensive test with quality metrics display
-.\test-randomness.ps1 -GatewayUrl "http://localhost:8080" -ApiKey "your-api-key" -Iterations 1000000
+.\test-randomness.ps1 -GatewayUrl "http://localhost:7764" -ApiKey "your-api-key" -Iterations 1000000
 
 # Verbose mode
 .\test-randomness.ps1 -Verbose
@@ -536,7 +536,7 @@ FROM debian:bookworm-slim
 RUN apt-get update && apt-get install -y ca-certificates && rm -rf /var/lib/apt/lists/*
 COPY --from=builder /app/target/release/qrng-gateway /usr/local/bin/
 COPY config/ /etc/qrng/
-EXPOSE 8080
+EXPOSE 7764
 CMD ["qrng-gateway", "--config", "/etc/qrng/gateway.yaml"]
 ```
 
@@ -553,7 +553,7 @@ docker run -d --name entropy-collector \
 ```bash
 # Build and run
 docker build -f Dockerfile.gateway -t qrng-entropy-gateway:latest .
-docker run -d --name entropy-gateway -p 8080:8080 \
+docker run -d --name entropy-gateway -p 7764:7764 \
   -v ./config/gateway.yaml:/etc/qrng/gateway.yaml:ro \
   qrng-entropy-gateway:latest --config /etc/qrng/gateway.yaml
 ```
