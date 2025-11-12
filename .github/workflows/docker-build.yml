@@ -45,10 +45,8 @@ jobs:
         uses: docker/metadata-action@v5
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}/${{ matrix.component.name }}
-          tags: |
-            type=raw,value=${{ matrix.component.name }}
-            type=raw,value=latest
-            type=sha,prefix=${{ matrix.component.name }}-,format=short
+          tags: |            
+            type=raw,value=latest            
 
       - name: Build and push Docker image
         uses: docker/build-push-action@v5
