@@ -434,12 +434,13 @@ async fn handle_mcp(
     // Format as SSE (Server-Sent Events) for LM Studio compatibility
     let sse_response = format!("event: message\ndata: {}\n\n", response_str);
 
-    // Return SSE response
+    // Return SSE response with streaming headers (no Content-Length)
     Ok(Response::builder()
         .status(StatusCode::OK)
         .header("Content-Type", "text/event-stream")
-        .header("Cache-Control", "no-cache")
+        .header("Cache-Control", "no-cache, no-store")
         .header("Connection", "keep-alive")
+        .header("X-Accel-Buffering", "no")
         .body(sse_response.into())
         .unwrap())
 }
