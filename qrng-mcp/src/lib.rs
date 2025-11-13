@@ -80,7 +80,7 @@ impl QrngMcpServer {
     /// Fetch random bytes from quantum entropy source
     #[tool(description = "Fetch random bytes from quantum entropy source")]
     async fn get_random_bytes(&self, Parameters(args): Parameters<GetRandomBytesArgs>) -> Result<String, ErrorData> {
-        let mut buffer = self.buffer.lock().await;
+        let buffer = self.buffer.lock().await;
 
         // Validate count
         if args.count == 0 || args.count > 65536 {
@@ -115,7 +115,7 @@ impl QrngMcpServer {
     /// Generate random integers in specified range
     #[tool(description = "Generate random integers in specified range")]
     async fn get_random_integers(&self, Parameters(args): Parameters<GetRandomIntegersArgs>) -> Result<String, ErrorData> {
-        let mut buffer = self.buffer.lock().await;
+        let buffer = self.buffer.lock().await;
 
         // Validate count
         if args.count == 0 || args.count > 1000 {
@@ -151,7 +151,7 @@ impl QrngMcpServer {
     /// Generate random floats in range [0, 1)
     #[tool(description = "Generate random floats in range [0, 1)")]
     async fn get_random_floats(&self, Parameters(args): Parameters<GetRandomFloatsArgs>) -> Result<String, ErrorData> {
-        let mut buffer = self.buffer.lock().await;
+        let buffer = self.buffer.lock().await;
 
         // Validate count
         if args.count == 0 || args.count > 1000 {
@@ -179,7 +179,7 @@ impl QrngMcpServer {
     /// Generate random UUID v4
     #[tool(description = "Generate random UUID v4")]
     async fn get_random_uuid(&self, Parameters(args): Parameters<GetRandomUuidArgs>) -> Result<String, ErrorData> {
-        let mut buffer = self.buffer.lock().await;
+        let buffer = self.buffer.lock().await;
 
         let count = args.count.unwrap_or(1);
 
