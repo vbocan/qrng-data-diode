@@ -25,6 +25,9 @@ jobs:
           - name: qrng-gateway
             dockerfile: qrng-gateway/Dockerfile
             context: .
+          - name: qrng-mcp
+            dockerfile: qrng-mcp/Dockerfile
+            context: .
 
     steps:
       - name: Checkout code
