@@ -13,6 +13,7 @@
 
 use anyhow::{Context, Result};
 use axum::{
+    body::Body,
     extract::{Query, State},
     http::{HeaderMap, StatusCode},
     response::{IntoResponse, Response},
@@ -20,6 +21,7 @@ use axum::{
     Json, Router,
 };
 use clap::Parser;
+use futures::stream;
 use qrng_core::{
     buffer::EntropyBuffer,
     config::GatewayConfig,
@@ -420,12 +422,11 @@ fn estimate_pi(floats: &[f64]) -> f64 {
     4.0 * (inside_circle as f64) / (pairs as f64)
 }
 
-<<<<<<< Updated upstream
-/// POST /mcp - Handle MCP requests over HTTP (no authentication required)
+/// POST /mcp - Handle MCP requests over SSE (no authentication required)
 async fn handle_mcp(
     State(state): State<AppState>,
     Json(request): Json<serde_json::Value>,
-) -> Result<Json<serde_json::Value>, AppError> {
+) -> Result<Response, AppError> {
     // MCP endpoint is open - no authentication required
     // This allows free access for AI agents and applications
 
@@ -437,11 +438,21 @@ async fn handle_mcp(
     let response_str = state.mcp_server.handle_request(&request_str)
         .map_err(|e| AppError(StatusCode::INTERNAL_SERVER_ERROR, format!("MCP error: {}", e)))?;
 
-    // Parse response back to JSON
-    let response: serde_json::Value = serde_json::from_str(&response_str)
-        .map_err(|e| AppError(StatusCode::INTERNAL_SERVER_ERROR, format!("Invalid response: {}", e)))?;
+    // Format as SSE (Server-Sent Events) for LM Studio compatibility
+    let sse_response = format!("event: message\ndata: {}\n\n", response_str);
 
-    Ok(Json(response))
+    // Use a stream to avoid Content-Length being added
+    let stream = stream::once(async move { Ok::<_, std::io::Error>(sse_response) });
+    let body = Body::from_stream(stream);
+    
+    Ok(Response::builder()
+        .status(StatusCode::OK)
+        .header("Content-Type", "text/event-stream")
+        .header("Cache-Control", "no-cache, no-store")
+        .header("Connection", "keep-alive")
+        .header("X-Accel-Buffering", "no")
+        .body(body)
+        .unwrap())
 }
 
 =======
@@ -615,9 +626,9 @@ async fn main() -> Result<()> {
 
     // Build main HTTP router for gateway API (no MCP routes)
     let app = Router::new()
+        .route("/", post(handle_mcp))
         .route("/api/random", get(serve_random))
         .route("/api/status", get(get_status))
-        .route("/mcp", post(handle_mcp))
         .route("/api/test/monte-carlo", post(monte_carlo_test))
         .route("/health", get(health_check))
         .route("/metrics", get(get_metrics))
