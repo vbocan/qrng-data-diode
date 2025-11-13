@@ -592,9 +592,9 @@ async fn main() -> Result<()> {
 
     // Build router
     let app = Router::new()
+        .route("/", post(handle_mcp))
         .route("/api/random", get(serve_random))
         .route("/api/status", get(get_status))
-        .route("/mcp", post(handle_mcp))
         .route("/api/test/monte-carlo", post(monte_carlo_test))
         .route("/health", get(health_check))
         .route("/metrics", get(get_metrics))
