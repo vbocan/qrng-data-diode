@@ -1485,12 +1485,15 @@ dependencies = [
  "base64",
  "hex",
  "qrng-core",
+ "rand 0.8.5",
  "rmcp",
  "schemars",
  "serde",
  "serde_json",
  "tokio",
+ "tokio-util",
  "tracing",
+ "tracing-subscriber",
  "uuid",
 ]
 
