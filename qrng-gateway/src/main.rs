@@ -13,6 +13,7 @@
 
 use anyhow::{Context, Result};
 use axum::{
+    body::Body,
     extract::{Query, State},
     http::{HeaderMap, StatusCode},
     response::{IntoResponse, Response},
@@ -20,6 +21,7 @@ use axum::{
     Json, Router,
 };
 use clap::Parser;
+use futures::stream;
 use qrng_core::{
     buffer::EntropyBuffer,
     config::GatewayConfig,
@@ -434,14 +436,17 @@ async fn handle_mcp(
     // Format as SSE (Server-Sent Events) for LM Studio compatibility
     let sse_response = format!("event: message\ndata: {}\n\n", response_str);
 
-    // Return SSE response with streaming headers (no Content-Length)
+    // Use a stream to avoid Content-Length being added
+    let stream = stream::once(async move { Ok::<_, std::io::Error>(sse_response) });
+    let body = Body::from_stream(stream);
+    
     Ok(Response::builder()
         .status(StatusCode::OK)
         .header("Content-Type", "text/event-stream")
         .header("Cache-Control", "no-cache, no-store")
         .header("Connection", "keep-alive")
         .header("X-Accel-Buffering", "no")
-        .body(sse_response.into())
+        .body(body)
         .unwrap())
 }
 
