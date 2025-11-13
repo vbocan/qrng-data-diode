@@ -1353,6 +1353,7 @@ dependencies = [
  "axum",
  "chrono",
  "clap",
+ "futures",
  "hex",
  "hyper",
  "parking_lot",
