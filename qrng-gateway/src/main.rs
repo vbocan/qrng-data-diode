@@ -415,11 +415,11 @@ fn estimate_pi(floats: &[f64]) -> f64 {
     4.0 * (inside_circle as f64) / (pairs as f64)
 }
 
-/// POST /mcp - Handle MCP requests over HTTP (no authentication required)
+/// POST /mcp - Handle MCP requests over SSE (no authentication required)
 async fn handle_mcp(
     State(state): State<AppState>,
     Json(request): Json<serde_json::Value>,
-) -> Result<Json<serde_json::Value>, AppError> {
+) -> Result<Response, AppError> {
     // MCP endpoint is open - no authentication required
     // This allows free access for AI agents and applications
 
@@ -431,11 +431,17 @@ async fn handle_mcp(
     let response_str = state.mcp_server.handle_request(&request_str)
         .map_err(|e| AppError(StatusCode::INTERNAL_SERVER_ERROR, format!("MCP error: {}", e)))?;
 
-    // Parse response back to JSON
-    let response: serde_json::Value = serde_json::from_str(&response_str)
-        .map_err(|e| AppError(StatusCode::INTERNAL_SERVER_ERROR, format!("Invalid response: {}", e)))?;
+    // Format as SSE (Server-Sent Events) for LM Studio compatibility
+    let sse_response = format!("event: message\ndata: {}\n\n", response_str);
 
-    Ok(Json(response))
+    // Return SSE response
+    Ok(Response::builder()
+        .status(StatusCode::OK)
+        .header("Content-Type", "text/event-stream")
+        .header("Cache-Control", "no-cache")
+        .header("Connection", "keep-alive")
+        .body(sse_response.into())
+        .unwrap())
 }
 
 /// POST /push - Receive entropy packets (push mode only)
