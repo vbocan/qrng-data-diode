@@ -80,21 +80,14 @@ impl QrngMcpServer {
     /// Fetch random bytes from quantum entropy source
     #[tool(description = "Fetch random bytes from quantum entropy source")]
     async fn get_random_bytes(&self, Parameters(args): Parameters<GetRandomBytesArgs>) -> Result<String, ErrorData> {
-        let buffer = self.buffer.lock().await;
-
         // Validate count
         if args.count == 0 || args.count > 65536 {
             return Err(ErrorData::new(ErrorCode::INVALID_PARAMS, "Count must be between 1 and 65536", None));
         }
 
-        // Get random bytes
-        let mut bytes = vec![0u8; args.count];
-        
-        if let Some(data) = buffer.pop(bytes.len()) {
-            bytes.copy_from_slice(&data);
-        } else {
-            return Err(ErrorData::new(ErrorCode::INTERNAL_ERROR, "Not enough entropy available", None));
-        }
+        // Get random bytes - buffer.pop() is called on the buffer directly
+        let bytes = self.buffer.lock().await.pop(args.count)
+            .ok_or_else(|| ErrorData::new(ErrorCode::INTERNAL_ERROR, "Not enough entropy available", None))?;
 
         // Encode based on format
         let encoding = args.encoding.as_deref().unwrap_or("hex");
@@ -115,8 +108,6 @@ impl QrngMcpServer {
     /// Generate random integers in specified range
     #[tool(description = "Generate random integers in specified range")]
     async fn get_random_integers(&self, Parameters(args): Parameters<GetRandomIntegersArgs>) -> Result<String, ErrorData> {
-        let buffer = self.buffer.lock().await;
-
         // Validate count
         if args.count == 0 || args.count > 1000 {
             return Err(ErrorData::new(ErrorCode::INVALID_PARAMS, "Count must be between 1 and 1000", None));
@@ -132,15 +123,17 @@ impl QrngMcpServer {
         let range = (max - min + 1) as u64;
         let mut integers = Vec::new();
 
-        for _ in 0..args.count {
-            let mut bytes = [0u8; 8];
-            
-        if let Some(data) = buffer.pop(bytes.len()) {
-            bytes.copy_from_slice(&data);
-        } else {
-            return Err(ErrorData::new(ErrorCode::INTERNAL_ERROR, "Not enough entropy available", None));
-        }
-            let value = u64::from_le_bytes(bytes);
+        // Get all required bytes at once
+        let total_bytes = args.count * 8;
+        let bytes = self.buffer.lock().await.pop(total_bytes)
+            .ok_or_else(|| ErrorData::new(ErrorCode::INTERNAL_ERROR, "Not enough entropy available", None))?;
+
+        // Convert bytes to integers
+        for i in 0..args.count {
+            let offset = i * 8;
+            let mut chunk = [0u8; 8];
+            chunk.copy_from_slice(&bytes[offset..offset + 8]);
+            let value = u64::from_le_bytes(chunk);
             let result = min + (value % range) as i64;
             integers.push(result);
         }
@@ -151,8 +144,6 @@ impl QrngMcpServer {
     /// Generate random floats in range [0, 1)
     #[tool(description = "Generate random floats in range [0, 1)")]
     async fn get_random_floats(&self, Parameters(args): Parameters<GetRandomFloatsArgs>) -> Result<String, ErrorData> {
-        let buffer = self.buffer.lock().await;
-
         // Validate count
         if args.count == 0 || args.count > 1000 {
             return Err(ErrorData::new(ErrorCode::INVALID_PARAMS, "Count must be between 1 and 1000", None));
@@ -160,15 +151,17 @@ impl QrngMcpServer {
 
         let mut floats = Vec::new();
 
-        for _ in 0..args.count {
-            let mut bytes = [0u8; 8];
-            
-        if let Some(data) = buffer.pop(bytes.len()) {
-            bytes.copy_from_slice(&data);
-        } else {
-            return Err(ErrorData::new(ErrorCode::INTERNAL_ERROR, "Not enough entropy available", None));
-        }
-            let value = u64::from_le_bytes(bytes);
+        // Get all required bytes at once
+        let total_bytes = args.count * 8;
+        let bytes = self.buffer.lock().await.pop(total_bytes)
+            .ok_or_else(|| ErrorData::new(ErrorCode::INTERNAL_ERROR, "Not enough entropy available", None))?;
+
+        // Convert bytes to floats
+        for i in 0..args.count {
+            let offset = i * 8;
+            let mut chunk = [0u8; 8];
+            chunk.copy_from_slice(&bytes[offset..offset + 8]);
+            let value = u64::from_le_bytes(chunk);
             let float_val = (value as f64) / (u64::MAX as f64);
             floats.push(float_val);
         }
@@ -179,8 +172,6 @@ impl QrngMcpServer {
     /// Generate random UUID v4
     #[tool(description = "Generate random UUID v4")]
     async fn get_random_uuid(&self, Parameters(args): Parameters<GetRandomUuidArgs>) -> Result<String, ErrorData> {
-        let buffer = self.buffer.lock().await;
-
         let count = args.count.unwrap_or(1);
 
         // Validate count
@@ -190,20 +181,22 @@ impl QrngMcpServer {
 
         let mut uuids = Vec::new();
 
-        for _ in 0..count {
-            let mut bytes = [0u8; 16];
-            
-        if let Some(data) = buffer.pop(bytes.len()) {
-            bytes.copy_from_slice(&data);
-        } else {
-            return Err(ErrorData::new(ErrorCode::INTERNAL_ERROR, "Not enough entropy available", None));
-        }
+        // Get all required bytes at once
+        let total_bytes = count * 16;
+        let bytes = self.buffer.lock().await.pop(total_bytes)
+            .ok_or_else(|| ErrorData::new(ErrorCode::INTERNAL_ERROR, "Not enough entropy available", None))?;
+
+        // Convert bytes to UUIDs
+        for i in 0..count {
+            let offset = i * 16;
+            let mut chunk = [0u8; 16];
+            chunk.copy_from_slice(&bytes[offset..offset + 16]);
             
             // Set version (4) and variant (RFC 4122)
-            bytes[6] = (bytes[6] & 0x0f) | 0x40;
-            bytes[8] = (bytes[8] & 0x3f) | 0x80;
+            chunk[6] = (chunk[6] & 0x0f) | 0x40;
+            chunk[8] = (chunk[8] & 0x3f) | 0x80;
             
-            let uuid = uuid::Uuid::from_bytes(bytes);
+            let uuid = uuid::Uuid::from_bytes(chunk);
             uuids.push(uuid.to_string());
         }
 
