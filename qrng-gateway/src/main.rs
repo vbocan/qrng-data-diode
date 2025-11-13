@@ -13,7 +13,6 @@
 
 use anyhow::{Context, Result};
 use axum::{
-    body::Body,
     extract::{Query, State},
     http::{HeaderMap, StatusCode},
     response::{IntoResponse, Response},
@@ -21,7 +20,6 @@ use axum::{
     Json, Router,
 };
 use clap::Parser;
-use futures::stream;
 use qrng_core::{
     buffer::EntropyBuffer,
     config::GatewayConfig,
@@ -30,10 +28,7 @@ use qrng_core::{
     protocol::{EncodingFormat, EntropyPacket, GatewayStatus, HealthStatus},
 };
 use qrng_mcp::QrngMcpServer;
-use rmcp::{
-    RoleServer, ServiceExt,
-    transport::sse_server::{SseServer, SseServerConfig},
-};
+use rmcp::transport::sse_server::{SseServer, SseServerConfig};
 use serde::{Deserialize, Serialize};
 use std::net::SocketAddr;
 use std::sync::Arc;
@@ -422,41 +417,6 @@ fn estimate_pi(floats: &[f64]) -> f64 {
     4.0 * (inside_circle as f64) / (pairs as f64)
 }
 
-/// POST /mcp - Handle MCP requests over SSE (no authentication required)
-async fn handle_mcp(
-    State(state): State<AppState>,
-    Json(request): Json<serde_json::Value>,
-) -> Result<Response, AppError> {
-    // MCP endpoint is open - no authentication required
-    // This allows free access for AI agents and applications
-
-    // Convert request to string for MCP handler
-    let request_str = serde_json::to_string(&request)
-        .map_err(|e| AppError(StatusCode::BAD_REQUEST, format!("Invalid JSON: {}", e)))?;
-
-    // Handle MCP request
-    let response_str = state.mcp_server.handle_request(&request_str)
-        .map_err(|e| AppError(StatusCode::INTERNAL_SERVER_ERROR, format!("MCP error: {}", e)))?;
-
-    // Format as SSE (Server-Sent Events) for LM Studio compatibility
-    let sse_response = format!("event: message\ndata: {}\n\n", response_str);
-
-    // Use a stream to avoid Content-Length being added
-    let stream = stream::once(async move { Ok::<_, std::io::Error>(sse_response) });
-    let body = Body::from_stream(stream);
-    
-    Ok(Response::builder()
-        .status(StatusCode::OK)
-        .header("Content-Type", "text/event-stream")
-        .header("Cache-Control", "no-cache, no-store")
-        .header("Connection", "keep-alive")
-        .header("X-Accel-Buffering", "no")
-        .body(body)
-        .unwrap())
-}
-
-=======
->>>>>>> Stashed changes
 /// POST /push - Receive entropy packets (push mode only)
 async fn receive_push(
     State(state): State<AppState>,
@@ -582,10 +542,6 @@ async fn main() -> Result<()> {
         None
     };
 
-    // Create MCP server using official rmcp SDK
-    info!("Initializing MCP server");
-    let mcp_server = QrngMcpServer::new(buffer.clone());
-
     // Create application state
     let state = AppState {
         config: config.clone(),
@@ -595,6 +551,10 @@ async fn main() -> Result<()> {
         start_time: Instant::now(),
         rate_limiter: Arc::new(RateLimiter::new(config.rate_limit_per_second)),
     };
+
+    // Create MCP server using official rmcp SDK
+    info!("Initializing MCP server");
+    let mcp_server = QrngMcpServer::new(buffer.clone());
 
     // Parse listen address
     let addr: SocketAddr = config.listen_address.parse()
@@ -626,7 +586,6 @@ async fn main() -> Result<()> {
 
     // Build main HTTP router for gateway API (no MCP routes)
     let app = Router::new()
-        .route("/", post(handle_mcp))
         .route("/api/random", get(serve_random))
         .route("/api/status", get(get_status))
         .route("/api/test/monte-carlo", post(monte_carlo_test))
