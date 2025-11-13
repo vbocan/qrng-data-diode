@@ -1482,8 +1482,11 @@ name = "qrng-mcp"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "axum 0.8.6",
  "base64",
  "hex",
+ "http",
+ "http-body-util",
  "qrng-core",
  "rand 0.8.5",
  "rmcp",
@@ -1492,6 +1495,7 @@ dependencies = [
  "serde_json",
  "tokio",
  "tokio-util",
+ "tower",
  "tracing",
  "tracing-subscriber",
  "uuid",
