@@ -25,7 +25,7 @@ async fn main() -> anyhow::Result<()> {
 
     // Parse bind address from environment or use default
     let bind_addr: SocketAddr = std::env::var("MCP_BIND_ADDR")
-        .unwrap_or_else(|_| "127.0.0.1:3000".to_string())
+        .unwrap_or_else(|_| "0.0.0.0:8080".to_string())
         .parse()?;
 
     // Create entropy buffer (10 MB capacity)
