@@ -1,26 +1,26 @@
 #!/usr/bin/env pwsh
 <#
 .SYNOPSIS
-    Direct MCP bridge for QRNG Gateway - No proxy needed!
+    MCP bridge for QRNG MCP Server - Connects Claude Desktop to remote MCP server
     
 .DESCRIPTION
-    This script bridges stdio (for Claude Desktop) to HTTP (for remote QRNG gateway)
-    using PowerShell's built-in HTTP capabilities.
+    This script bridges stdio (for Claude Desktop) to HTTP (for remote QRNG MCP server)
+    using the Streamable HTTP protocol (MCP 2025-06-18 spec).
     
-.PARAMETER GatewayUrl
-    The QRNG Gateway URL (e.g., https://qrng.yourdomain.com)
+.PARAMETER McpServerUrl
+    The QRNG MCP Server URL (e.g., http://qrng-mcp:8080)
     
 .EXAMPLE
     # Claude Desktop configuration:
     {
       "mcpServers": {
         "qrng": {
-          "command": "pwershell",
+          "command": "pwsh",
           "args": [
             "-File",
             "D:\\path\\to\\mcp_bridge.ps1",
-            "-GatewayUrl",
-            "https://qrng.yourdomain.com"
+            "-McpServerUrl",
+            "http://localhost:8080"
           ]
         }
       }
@@ -29,11 +29,14 @@
 
 param(
     [Parameter(Mandatory=$true)]
-    [string]$GatewayUrl
+    [string]$McpServerUrl
 )
 
 # Ensure URL ends without trailing slash
-$mcpUrl = $GatewayUrl.TrimEnd('/') + '/mcp'
+$baseUrl = $McpServerUrl.TrimEnd('/')
+
+# Create persistent HTTP client for session management
+$sessionId = $null
 
 # Process stdin line by line
 try {
@@ -46,13 +49,36 @@ try {
             # Parse JSON request
             $request = $line | ConvertFrom-Json
             
-            # Forward to gateway
-            $response = Invoke-RestMethod -Uri $mcpUrl `
-                -Method Post `
-                -ContentType 'application/json' `
+            # Determine HTTP method based on request
+            $method = 'POST'
+            $uri = $baseUrl
+            
+            # Check if this is a session termination
+            if ($request.method -eq 'close' -and $sessionId) {
+                $method = 'DELETE'
+                $uri = "$baseUrl/?sessionId=$sessionId"
+            }
+            
+            # Forward to MCP server
+            $headers = @{
+                'Content-Type' = 'application/json'
+            }
+            
+            if ($sessionId) {
+                $headers['X-Session-Id'] = $sessionId
+            }
+            
+            $response = Invoke-RestMethod -Uri $uri `
+                -Method $method `
+                -Headers $headers `
                 -Body $line `
                 -TimeoutSec 30 `
                 -ErrorAction Stop
+            
+            # Extract session ID from response if present
+            if ($response.sessionId) {
+                $sessionId = $response.sessionId
+            }
             
             # Send response to stdout
             $response | ConvertTo-Json -Depth 10 -Compress | Write-Host
