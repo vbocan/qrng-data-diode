@@ -254,8 +254,10 @@ impl QrngMcpServer {
             }
         };
 
-        // Use 5 million iterations for high-quality statistical testing
-        const ITERATIONS: u64 = 5_000_000;
+        // Use half a million iterations for quality statistical testing
+        // Requires 16 MB (2 floats × 8 bytes per iteration)
+        // This fits comfortably within the 10 MB buffer when it's well-filled
+        const ITERATIONS: u64 = 500_000;
         
         // Check if buffer has enough data (need 16 bytes per iteration)
         let bytes_needed = (ITERATIONS * 16) as usize;
@@ -327,7 +329,8 @@ impl ServerHandler for QrngMcpServer {
         }
     }
 }
-
+
+
 
 
 
