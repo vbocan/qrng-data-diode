@@ -70,12 +70,7 @@ pub struct GetRandomUuidArgs {
     pub count: Option<usize>,
 }
 
-/// Arguments for get_data_quality tool
-#[derive(Debug, Serialize, Deserialize, JsonSchema)]
-pub struct GetDataQualityArgs {
-    #[schemars(description = "Number of Monte Carlo iterations (1-10000000, default: 1000000)")]
-    pub iterations: Option<u64>,
-}
+
 
 #[tool_router]
 impl QrngMcpServer {
@@ -245,8 +240,8 @@ impl QrngMcpServer {
     }
 
     /// Test random data quality using Monte Carlo π estimation (via gateway)
-    #[tool(description = "Test random data quality using Monte Carlo π estimation")]
-    async fn get_data_quality(&self, Parameters(args): Parameters<GetDataQualityArgs>) -> Result<String, ErrorData> {
+    #[tool(description = "Test the quality of quantum random data using Monte Carlo π estimation. Returns statistical metrics about randomness quality.")]
+    async fn get_data_quality(&self) -> Result<String, ErrorData> {
         // Check if gateway is configured
         let (gateway_url, api_key) = match (&self.gateway_url, &self.gateway_api_key) {
             (Some(url), Some(key)) => (url, key),
@@ -259,11 +254,34 @@ impl QrngMcpServer {
             }
         };
 
-        let iterations = args.iterations.unwrap_or(1_000_000);
+        // Use 5 million iterations for high-quality statistical testing
+        const ITERATIONS: u64 = 5_000_000;
+        
+        // Check if buffer has enough data (need 16 bytes per iteration)
+        let bytes_needed = (ITERATIONS * 16) as usize;
+        let buffer = self.buffer.lock().await;
+        let available = buffer.len();
+        drop(buffer);
+        
+        if available < bytes_needed {
+            let result = serde_json::json!({
+                "status": "unavailable",
+                "message": format!(
+                    "Quality test requires {} MB of entropy. Currently {} MB available. Test will be available soon as the buffer fills.",
+                    bytes_needed / 1_048_576,
+                    available / 1_048_576
+                ),
+                "bytes_needed": bytes_needed,
+                "bytes_available": available,
+                "fill_percentage": (available as f64 / bytes_needed as f64 * 100.0).round()
+            });
+            return serde_json::to_string(&result)
+                .map_err(|e| ErrorData::new(ErrorCode::INTERNAL_ERROR, format!("Failed to serialize result: {}", e), None));
+        }
 
         // Call gateway's Monte Carlo endpoint
         let client = reqwest::Client::new();
-        let url = format!("{}/api/test/monte-carlo?iterations={}", gateway_url, iterations);
+        let url = format!("{}/api/test/monte-carlo?iterations={}", gateway_url, ITERATIONS);
         
         let response = client
             .post(&url)
@@ -273,9 +291,18 @@ impl QrngMcpServer {
             .map_err(|e| ErrorData::new(ErrorCode::INTERNAL_ERROR, format!("Failed to contact gateway: {}", e), None))?;
 
         if !response.status().is_success() {
+            let status = response.status();
+            if status == reqwest::StatusCode::INSUFFICIENT_STORAGE {
+                let result = serde_json::json!({
+                    "status": "unavailable",
+                    "message": "Insufficient entropy in gateway buffer. Test will be available soon as the buffer fills."
+                });
+                return serde_json::to_string(&result)
+                    .map_err(|e| ErrorData::new(ErrorCode::INTERNAL_ERROR, format!("Failed to serialize result: {}", e), None));
+            }
             return Err(ErrorData::new(
                 ErrorCode::INTERNAL_ERROR,
-                format!("Gateway returned error: {}", response.status()),
+                format!("Gateway returned error: {}", status),
                 None
             ));
         }
