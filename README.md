@@ -24,27 +24,46 @@ This system provides secure access to quantum-generated random numbers from a lo
 ### System Architecture
 
 ```
-┌─────────────────────────┐         ┌─────────────────────────┐
-│   Internal Network      │         │   External Network      │
-│                         │         │                         │
-│  ┌──────────────────┐   │         │  ┌──────────────────┐   │
-│  │  Quantis QRNG    │   │         │  │   AI Agents      │   │
-│  │    Appliance     │   │         │  │   Clients        │   │
-│  └────────┬─────────┘   │         │  └────────▲─────────┘   │
-│           │ HTTPS       │         │           │             │
-│           │ fetch       │         │           │ REST API    │
-│           ▼             │         │           │             │
-│  ┌──────────────────┐   │         │  ┌────────┴─────────┐   │
-│  │      QRNG        │   │  HTTPS  │  │      QRNG        │   │
-│  │    Collector     │───┼────────>│──│     Gateway      │   │
-│  │                  │   │  push   │  │                  │   │
-│  │  - Fetch loop    │   │  (one-  │  │  - REST API      │   │
-│  │  - Buffer (1MB)  │   │   way)  │  │  - Buffer (10MB) │   │
-│  │  - HMAC signing  │   │         │  │  - MCP Server    │   │
-│  └──────────────────┘   │         │  │  - Metrics       │   │
-│                         │         │  └──────────────────┘   │
-└─────────────────────────┘         └─────────────────────────┘
+┌─────────────────────────┐         ┌─────────────────────────────────────┐
+│   Internal Network      │         │         External Network            │
+│                         │         │                                     │
+│  ┌──────────────────┐   │         │  ┌──────────────────┐               │
+│  │  Quantis QRNG    │   │         │  │   AI Agents      │               │
+│  │    Appliance     │   │         │  │   (Claude, etc)  │               │
+│  └────────┬─────────┘   │         │  └────────┬─────────┘               │
+│           │ HTTPS       │         │           │ MCP                     │
+│           │ fetch       │         │           │ protocol                │
+│           ▼             │         │           ▼                         │
+│  ┌──────────────────┐   │         │  ┌────────────────────┐             │
+│  │      QRNG        │   │  HTTPS  │  │    QRNG MCP       │             │
+│  │    Collector     │───┼────────>│──│     Server        │             │
+│  │                  │   │  push   │  │                   │             │
+│  │  - Fetch loop    │   │  (one-  │  │  - MCP protocol   │             │
+│  │  - Buffer (1MB)  │   │   way)  │  │  - Fetches from   │             │
+│  │  - HMAC signing  │   │         │  │    Gateway API    │             │
+│  └──────────────────┘   │         │  └────────┬───────────┘             │
+│                         │         │           │ HTTP                    │
+│                         │         │           │ fetch                   │
+│                         │         │           ▼                         │
+│                         │         │  ┌────────────────────┐             │
+│                         │         │  │   QRNG Gateway     │◄────────┐   │
+│                         │         │  │                    │         │   │
+│                         │         │  │  - REST API        │    REST │   │
+│                         │         │  │  - Buffer (10MB)   │     API │   │
+│                         │         │  │  - Metrics         │         │   │
+│                         │         │  └────────────────────┘         │   │
+│                         │         │                                 │   │
+│                         │         │  ┌──────────────────┐           │   │
+│                         │         │  │   API Clients    │───────────┘   │
+│                         │         │  └──────────────────┘               │
+└─────────────────────────┘         └─────────────────────────────────────┘
 ```
+
+### Component Responsibilities
+
+- **qrng-collector**: Fetches entropy from QRNG appliances, signs packets, pushes to gateway
+- **qrng-gateway**: Receives pushed entropy, serves REST API, handles authentication
+- **qrng-mcp**: Standalone MCP server that fetches from gateway and serves AI agents
 
 ## Quick Start
 

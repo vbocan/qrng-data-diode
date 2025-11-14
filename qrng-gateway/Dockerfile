@@ -47,14 +47,14 @@ COPY --from=builder --chown=qrng:qrng /build/target/release/qrng-gateway /app/qr
 # Switch to non-root user
 USER qrng
 
-# Expose HTTP port
-EXPOSE 8080
+# Expose HTTP port (gateway API)
+EXPOSE 7764
 
 # Set environment variables
 ENV RUST_LOG=info
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD curl -f http://localhost:8080/health || exit 1
+    CMD curl -f http://localhost:7764/health || exit 1
 
 CMD ["/app/qrng-gateway", "--log-level", "info"]
