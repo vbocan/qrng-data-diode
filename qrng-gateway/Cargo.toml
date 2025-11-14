@@ -11,8 +11,6 @@ path = "src/main.rs"
 
 [dependencies]
 qrng-core = { path = "../qrng-core" }
-qrng-mcp = { path = "../qrng-mcp" }
-rmcp = { version = "0.8.5", features = ["server", "transport-sse-server"] }
 tokio = { workspace = true }
 tokio-util = "0.7"
 axum = { workspace = true }

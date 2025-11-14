@@ -27,12 +27,10 @@ use qrng_core::{
     metrics::Metrics,
     protocol::{EncodingFormat, EntropyPacket, GatewayStatus, HealthStatus},
 };
-use qrng_mcp::QrngMcpServer;
-use rmcp::transport::sse_server::{SseServer, SseServerConfig};
 use serde::{Deserialize, Serialize};
 use std::net::SocketAddr;
 use std::sync::Arc;
-use std::time::{Duration, Instant};
+use std::time::Instant;
 use tokio_util::sync::CancellationToken;
 use tower_http::cors::CorsLayer;
 use tracing::{error, info, warn};
@@ -552,10 +550,6 @@ async fn main() -> Result<()> {
         rate_limiter: Arc::new(RateLimiter::new(config.rate_limit_per_second)),
     };
 
-    // Create MCP server using official rmcp SDK
-    info!("Initializing MCP server");
-    let mcp_server = QrngMcpServer::new(buffer.clone());
-
     // Parse listen address
     let addr: SocketAddr = config.listen_address.parse()
         .context("Invalid listen address")?;
@@ -564,27 +558,7 @@ async fn main() -> Result<()> {
     let cancel_token = CancellationToken::new();
     let cancel_token_signal = cancel_token.clone();
 
-    // Configure SSE server for MCP on separate port
-    let mcp_addr: SocketAddr = format!("{}:8081", addr.ip()).parse()
-        .context("Invalid MCP address")?;
-    
-    let sse_config = SseServerConfig {
-        bind: mcp_addr,
-        sse_path: "/sse".to_string(),      // SSE stream endpoint
-        post_path: "/message".to_string(),  // POST message endpoint  
-        ct: cancel_token.clone(),
-        sse_keep_alive: Some(Duration::from_secs(15)),
-    };
-
-    // Create and start SSE server for MCP
-    let (sse_server, _sse_router) = SseServer::new(sse_config);
-    sse_server.with_service(move || mcp_server.clone());
-
-    info!("MCP server starting on {}", mcp_addr);
-    info!("MCP SSE endpoint: http://{}/sse", mcp_addr);
-    info!("MCP POST endpoint: http://{}/message", mcp_addr);
-
-    // Build main HTTP router for gateway API (no MCP routes)
+    // Build HTTP router for gateway API
     let app = Router::new()
         .route("/api/random", get(serve_random))
         .route("/api/status", get(get_status))
