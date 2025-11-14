@@ -276,6 +276,8 @@ struct MonteCarloResult {
     error_percent: f64,
     iterations: u64,
     convergence_rate: String,
+    quality_assessment: String,
+    note: String,
     quantum_vs_pseudo: Option<PseudoComparison>,
 }
 
@@ -352,7 +354,17 @@ async fn monte_carlo_test(
         "poor".to_string()
     };
 
-    // Compare with pseudo-random (optional, for demonstration)
+    let quality_assessment = if quantum_error_percent < 0.1 {
+        "high_quality".to_string()
+    } else if quantum_error_percent < 1.0 {
+        "acceptable".to_string()
+    } else {
+        "poor_quality".to_string()
+    };
+
+    // Compare with pseudo-random (for statistical demonstration only)
+    // Note: Pseudo-random can occasionally produce better Monte Carlo estimates
+    // due to statistical variance, but lacks cryptographic unpredictability
     let comparison = if params.iterations <= 1_000_000 {
         // Generate pseudo-random for comparison
         use rand::Rng;
@@ -388,6 +400,8 @@ async fn monte_carlo_test(
         error_percent: quantum_error_percent,
         iterations: params.iterations,
         convergence_rate,
+        quality_assessment,
+        note: "Monte Carlo tests measure statistical uniformity, not cryptographic security. Both quantum and pseudo-random can pass these tests, but only quantum provides true unpredictability.".to_string(),
         quantum_vs_pseudo: comparison,
     }))
 }
