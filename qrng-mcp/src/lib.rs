@@ -10,6 +10,7 @@
 //! - `get_random_floats`: Generate random floats
 //! - `get_random_uuid`: Generate UUID v4
 //! - `get_status`: Query buffer status
+//! - `get_data_quality`: Test random data quality using Monte Carlo simulation
 
 use qrng_core::buffer::EntropyBuffer;
 use rmcp::{
@@ -31,6 +32,8 @@ use tokio::sync::Mutex;
 pub struct QrngMcpServer {
     buffer: Arc<Mutex<EntropyBuffer>>,
     tool_router: ToolRouter<Self>,
+    gateway_url: Option<String>,
+    gateway_api_key: Option<String>,
 }
 
 /// Arguments for get_random_bytes tool
@@ -67,6 +70,13 @@ pub struct GetRandomUuidArgs {
     pub count: Option<usize>,
 }
 
+/// Arguments for get_data_quality tool
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+pub struct GetDataQualityArgs {
+    #[schemars(description = "Number of Monte Carlo iterations (1-10000000, default: 1000000)")]
+    pub iterations: Option<u64>,
+}
+
 #[tool_router]
 impl QrngMcpServer {
     /// Create a new QRNG MCP server
@@ -74,6 +84,18 @@ impl QrngMcpServer {
         Self {
             buffer: Arc::new(Mutex::new(buffer)),
             tool_router: Self::tool_router(),
+            gateway_url: None,
+            gateway_api_key: None,
+        }
+    }
+
+    /// Create a new QRNG MCP server with gateway access
+    pub fn with_gateway(buffer: EntropyBuffer, gateway_url: String, gateway_api_key: String) -> Self {
+        Self {
+            buffer: Arc::new(Mutex::new(buffer)),
+            tool_router: Self::tool_router(),
+            gateway_url: Some(gateway_url),
+            gateway_api_key: Some(gateway_api_key),
         }
     }
 
@@ -220,6 +242,48 @@ impl QrngMcpServer {
         });
 
         serde_json::to_string(&status).map_err(|e| ErrorData::new(ErrorCode::INTERNAL_ERROR, format!("Failed to serialize status: {}", e), None))
+    }
+
+    /// Test random data quality using Monte Carlo π estimation (via gateway)
+    #[tool(description = "Test random data quality using Monte Carlo π estimation")]
+    async fn get_data_quality(&self, Parameters(args): Parameters<GetDataQualityArgs>) -> Result<String, ErrorData> {
+        // Check if gateway is configured
+        let (gateway_url, api_key) = match (&self.gateway_url, &self.gateway_api_key) {
+            (Some(url), Some(key)) => (url, key),
+            _ => {
+                return Err(ErrorData::new(
+                    ErrorCode::INTERNAL_ERROR,
+                    "Gateway not configured for quality testing",
+                    None
+                ));
+            }
+        };
+
+        let iterations = args.iterations.unwrap_or(1_000_000);
+
+        // Call gateway's Monte Carlo endpoint
+        let client = reqwest::Client::new();
+        let url = format!("{}/api/test/monte-carlo?iterations={}", gateway_url, iterations);
+        
+        let response = client
+            .post(&url)
+            .header("Authorization", format!("Bearer {}", api_key))
+            .send()
+            .await
+            .map_err(|e| ErrorData::new(ErrorCode::INTERNAL_ERROR, format!("Failed to contact gateway: {}", e), None))?;
+
+        if !response.status().is_success() {
+            return Err(ErrorData::new(
+                ErrorCode::INTERNAL_ERROR,
+                format!("Gateway returned error: {}", response.status()),
+                None
+            ));
+        }
+
+        let result_text = response.text().await
+            .map_err(|e| ErrorData::new(ErrorCode::INTERNAL_ERROR, format!("Failed to read response: {}", e), None))?;
+
+        Ok(result_text)
     }
 }
 

@@ -66,7 +66,15 @@ async fn main() -> anyhow::Result<()> {
 
     // Create the service factory for both transports
     let buffer_clone = buffer.clone();
-    let service_factory = move || Ok::<_, std::io::Error>(QrngMcpServer::new(buffer_clone.clone()));
+    let gateway_url_clone = gateway_url.clone();
+    let gateway_api_key_clone = gateway_api_key.clone();
+    let service_factory = move || {
+        Ok::<_, std::io::Error>(QrngMcpServer::with_gateway(
+            buffer_clone.clone(),
+            gateway_url_clone.clone(),
+            gateway_api_key_clone.clone(),
+        ))
+    };
 
     // Create Streamable HTTP service
     let session_manager = Arc::new(LocalSessionManager::default());
