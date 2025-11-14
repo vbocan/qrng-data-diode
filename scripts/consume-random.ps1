@@ -49,23 +49,36 @@ function Get-RandomData {
         [string]$Format
     )
     
-    $endpoint = "$Url/api/random?bytes=$ByteCount&encoding=$Format&api_key=$Key"
+    $endpoint = "$Url/api/random?bytes=$ByteCount&encoding=$Format"
+    $headers = @{ "Authorization" = "Bearer $Key" }
     
     try {
-        $response = Invoke-WebRequest -Uri $endpoint -Method Get -UseBasicParsing -ErrorAction Stop
+        $response = Invoke-WebRequest -Uri $endpoint -Method Get -Headers $headers -UseBasicParsing -ErrorAction Stop
+        
+        # Decode hex data to bytes if format is hex
+        if ($Format -eq "hex") {
+            $hexString = $response.Content
+            $bytes = [byte[]]::new($hexString.Length / 2)
+            for ($i = 0; $i -lt $hexString.Length; $i += 2) {
+                $bytes[$i / 2] = [Convert]::ToByte($hexString.Substring($i, 2), 16)
+            }
+            $data = $bytes
+        } else {
+            $data = $response.Content
+        }
         
         return @{
             Success = $true
-            Data = $response.Content
+            Data = $data
             StatusCode = $response.StatusCode
-            Length = $response.Content.Length
+            Length = $data.Length
         }
     }
     catch {
         return @{
             Success = $false
             Error = $_.Exception.Message
-            StatusCode = $_.Exception.Response.StatusCode.Value__
+            StatusCode = if ($_.Exception.Response) { $_.Exception.Response.StatusCode.Value__ } else { 0 }
         }
     }
 }
@@ -145,7 +158,7 @@ while ($true) {
     
     Write-ColorOutput "Quantum Random Passwords (length: $PasswordLength):" -Color $Colors.Success
     for ($i = 0; $i -lt $PasswordsPerCycle; $i++) {
-        $result = Get-RandomData -Url $GatewayUrl -Key $ApiKey -ByteCount ($PasswordLength + 16) -Format "binary"
+        $result = Get-RandomData -Url $GatewayUrl -Key $ApiKey -ByteCount ($PasswordLength + 16) -Format "hex"
         
         if ($result.Success) {
             $password = New-SecurePassword -RandomBytes $result.Data -Length $PasswordLength
@@ -157,7 +170,7 @@ while ($true) {
     
     Write-ColorOutput "`nQuantum Random UUIDs (v4):" -Color $Colors.Success
     for ($i = 0; $i -lt $UUIDsPerCycle; $i++) {
-        $result = Get-RandomData -Url $GatewayUrl -Key $ApiKey -ByteCount 16 -Format "binary"
+        $result = Get-RandomData -Url $GatewayUrl -Key $ApiKey -ByteCount 16 -Format "hex"
         
         if ($result.Success) {
             $uuid = New-UUID -RandomBytes $result.Data
