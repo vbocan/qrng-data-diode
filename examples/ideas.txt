@@ -1,47 +1,73 @@
-1. Secure Key Generator for Cryptography
-   - Description: A CLI tool that generates cryptographic keys (e.g., AES-256 keys or elliptic curve private keys) using quantum random bits, ensuring high entropy for unbreakable security.
-   - Key Features: Input quantum entropy stream, generate keys in various formats (hex, base64), validate key strength with entropy tests.
-   - Rust Crates: `rand` (for RNG traits), `aes` or `ring` (for crypto primitives), `clap` (for CLI parsing).
-   - Showcase Value: Highlights how true randomness prevents predictable key attacks, unlike pseudo-RNGs, with applications in secure communications.
+1. Secure Key Generator
+   - Generate cryptographic keys (AES, RSA seeds, ECDSA) using quantum entropy
+   - Output formats: hex, base64, PEM
+   - Simple CLI demonstrating /api/random endpoint
 
-2. Monte Carlo Simulation for Pi Approximation
-   - Description: A program that estimates π using Monte Carlo methods, where points are randomly placed in a unit square/circle using quantum random numbers for coordinates.
-   - Key Features: Multi-threaded simulation for faster convergence, output error bounds and visualizations (e.g., ASCII plot), compare with pseudo-random runs.
-   - Rust Crates: `rand` (integrated with quantum source), `rayon` (for parallelism), `plotters` (for optional graphing).
-   - Showcase Value: Demonstrates improved statistical quality in scientific simulations, reducing bias in long-running computations like physics modeling.
+2. Random Number CLI Tools
+   - randint: Generate random integers in range [min, max]
+   - randfloat: Generate random floats in range [0.0, 1.0]
+   - randbytes: Output raw random bytes (binary or hex)
+   - UUID generator: Quantum-backed UUIDs for distributed systems
+   - Demonstrates basic gateway API usage patterns
 
-3. Random Walk Simulator for Diffusion Processes
-   - Description: Simulate 2D/3D random walks (e.g., modeling particle diffusion or stock prices) with steps determined by quantum random directions and magnitudes.
-   - Key Features: Generate trajectories, compute statistics (e.g., mean displacement), export to CSV for analysis.
-   - Rust Crates: `rand` (for random step generation), `ndarray` (for array-based computations), `csv` (for data export).
-   - Showcase Value: Illustrates the role of true randomness in unbiased stochastic processes, relevant to chemistry, biology, or finance research.
+3. Monte Carlo Pi Estimation
+   - Estimate π using random point sampling in unit circle
+   - Compare quantum vs pseudo-random convergence rates
+   - Output: estimated π, error bounds, number of samples
+   - Showcases statistical quality of quantum randomness
 
-4. Password and Passphrase Generator
-   - Description: A tool to create strong passwords or Diceware-style passphrases by sampling from word lists or character sets using quantum entropy.
-   - Key Features: Customizable length/strength, entropy estimation, optional BIP-39 mnemonic generation for wallets.
-   - Rust Crates: `rand` (with quantum integration), `clap` (CLI), `bip39` (for mnemonics).
-   - Showcase Value: Emphasizes security advantages over deterministic generators, preventing dictionary attacks in authentication systems.
+4. Traveling Salesman with Simulated Annealing
+   - Solve TSP using simulated annealing with quantum random transitions
+   - Accept/reject moves based on quantum random probability
+   - Visualize solution evolution and convergence
+   - Demonstrates quantum randomness in optimization algorithms
 
-5. Lottery Simulator with Fair Draws
-   - Description: A simple lottery game simulator that draws numbers or winners from a pool using quantum random selection, with options for bias testing.
-   - Key Features: Simulate multiple draws, calculate probabilities, log results for auditing.
-   - Rust Crates: `rand` (quantum-backed sampling), `serde` (for JSON logging), `statistical` (for distribution tests).
-   - Showcase Value: Shows tamper-proof fairness in random selection, applicable to scientific sampling or gaming research.
+5. Knapsack Problem with Genetic Algorithm
+   - Solve 0/1 knapsack using GA with quantum random mutations/crossover
+   - Quantum selection for parent chromosomes
+   - Compare convergence vs pseudo-random GA
+   - Shows quantum randomness improving metaheuristic search
 
-6. Procedural Noise Generator for Graphics
-   - Description: Generate Perlin-like noise maps or fractals using quantum random seeds/values for terrain/texture simulation in computer graphics.
-   - Key Features: Output as image files (e.g., PNG), adjustable parameters like octaves/scale.
-   - Rust Crates: `rand` (for noise functions), `image` (for PNG export), `noise` (for procedural algorithms).
-   - Showcase Value: Reveals how true randomness enhances unpredictability in simulations, useful in geophysics or game development studies.
+6. Password and Passphrase Generator
+   - Generate secure passwords with custom character sets
+   - Diceware-style passphrases using quantum word selection
+   - BIP-39 mnemonic phrases for cryptocurrency wallets
+   - Entropy estimation and strength indicators
 
-7. Statistical Test Suite for Randomness Quality
-   - Description: A benchmarking tool that runs NIST statistical tests (e.g., frequency, runs) on quantum random data streams, comparing against pseudo-random sources.
-   - Key Features: Process input streams, report pass/fail rates, visualize test results.
-   - Rust Crates: `rand` (multiple RNGs), `statrs` (for statistical functions), `plotters` (visualization).
-   - Showcase Value: Provides empirical evidence of quantum superiority in entropy quality, ideal for validating randomness in scientific software.
+7. Lottery and Fair Draw Simulator
+   - Simulate lottery draws using quantum selection
+   - Bias testing and statistical uniformity checks
+   - Audit logs for transparency
+   - Demonstrates provably fair randomness
 
-8. Quantum-Backed UUID Generator
-   - Description: An enhanced UUID (Universally Unique Identifier) generator that uses quantum random bits for version 4 UUIDs, ensuring global uniqueness without timestamps.
-   - Key Features: Batch generation, format options (e.g., hyphenated), integration with databases via examples.
-   - Rust Crates: `uuid` (extended with custom RNG), `rand` (quantum source).
-   - Showcase Value: Demonstrates practical use in distributed systems, where true randomness avoids collisions in large-scale data management.
+8. Random Walk Simulator
+   - 2D/3D random walks for diffusion modeling
+   - Applications: particle physics, stock price simulation, Brownian motion
+   - Export trajectories to CSV for analysis
+   - Statistics: mean squared displacement, diffusion coefficient
+
+9. Procedural Terrain Generator
+   - Generate height maps using quantum-seeded Perlin noise
+   - Output as grayscale PNG images
+   - Applications: game development, geological simulation
+   - Demonstrates unpredictability in procedural generation
+
+10. Statistical Randomness Test Suite
+    - Run NIST SP 800-22 statistical tests on quantum data
+    - Compare quantum vs pseudo-random sources
+    - Tests: frequency, runs, longest run, spectral, template matching
+    - Visualize test results and p-values
+    - Validates quantum randomness quality
+
+11. Quantum Dice Roller
+    - Simple dice simulator (d6, d20, custom sides)
+    - Multiple dice with modifiers (e.g., 3d6+2)
+    - Statistics tracking across rolls
+    - Educational tool for tabletop gaming
+
+12. Shuffling Algorithm Demonstrator
+    - Fisher-Yates shuffle using quantum randomness
+    - Shuffle playing cards, playlists, datasets
+    - Bias analysis to prove uniform shuffling
+    - Applications in cryptography and gaming
+
