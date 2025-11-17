@@ -106,18 +106,15 @@ impl EntropyBuffer {
         // Calculate available space
         let available_space = inner.max_size.saturating_sub(inner.current_size);
         
-        // If buffer is full, discard the packet
+        // If buffer is full, nothing can be stored
         if available_space == 0 {
             return Ok(0);
         }
 
-        // Determine how much data to push (partial if necessary)
+        // Fill buffer to maximum capacity, discarding overflow
+        // For random entropy, packet boundaries are arbitrary
         let bytes_to_push = data_len.min(available_space);
-        let data_to_push = if bytes_to_push < data_len {
-            data.slice(0..bytes_to_push)
-        } else {
-            data
-        };
+        let data_to_push = data.slice(0..bytes_to_push);
 
         // Push new entry
         inner.entries.push_back(BufferEntry {
