@@ -6,6 +6,10 @@
 .DESCRIPTION
     This script continuously generates secure passwords and UUIDs using
     quantum random numbers from the QRNG Gateway.
+    
+    NOTE: This script now uses the optimized /api/uuid endpoint instead of
+    manually constructing UUIDs from /api/random bytes. This is more efficient
+    and ensures correct UUIDv4 formatting.
 
 .EXAMPLE
     .\consume-random.ps1
@@ -14,6 +18,7 @@
 .NOTES
     Author: Valer BOCAN, PhD, CSSLP - www.bocan.ro
     Project: QRNG Data Diode
+    Updated: 2025-11-17 - Optimized to use /api/uuid endpoint
 #>
 
 # Hardcoded configuration
@@ -119,23 +124,43 @@ function New-SecurePassword {
     return -join $chars
 }
 
-function New-UUID {
-    param([byte[]]$RandomBytes)
+function Get-UUIDs {
+    param(
+        [string]$Url,
+        [string]$Key,
+        [int]$Count = 1
+    )
     
-    # Create a copy to avoid modifying the original array
-    $bytes = [byte[]]::new(16)
-    [Array]::Copy($RandomBytes, 0, $bytes, 0, 16)
+    $endpoint = "$Url/api/uuid?count=$Count"
+    $headers = @{ "Authorization" = "Bearer $Key" }
     
-    $bytes[6] = ($bytes[6] -band 0x0F) -bor 0x40
-    $bytes[8] = ($bytes[8] -band 0x3F) -bor 0x80
-    
-    $uuid = "{0:x2}{1:x2}{2:x2}{3:x2}-{4:x2}{5:x2}-{6:x2}{7:x2}-{8:x2}{9:x2}-{10:x2}{11:x2}{12:x2}{13:x2}{14:x2}{15:x2}" -f `
-        $bytes[0], $bytes[1], $bytes[2], $bytes[3],
-        $bytes[4], $bytes[5], $bytes[6], $bytes[7],
-        $bytes[8], $bytes[9], $bytes[10], $bytes[11],
-        $bytes[12], $bytes[13], $bytes[14], $bytes[15]
-    
-    return $uuid
+    try {
+        $response = Invoke-WebRequest -Uri $endpoint -Method Get -Headers $headers -UseBasicParsing -ErrorAction Stop
+        
+        if ($Count -eq 1) {
+            # Single UUID returned as plain text
+            return @{
+                Success = $true
+                Data = @($response.Content.Trim())
+                StatusCode = $response.StatusCode
+            }
+        } else {
+            # Multiple UUIDs returned as JSON array
+            $uuids = $response.Content | ConvertFrom-Json
+            return @{
+                Success = $true
+                Data = $uuids
+                StatusCode = $response.StatusCode
+            }
+        }
+    }
+    catch {
+        return @{
+            Success = $false
+            Error = $_.Exception.Message
+            StatusCode = if ($_.Exception.Response) { $_.Exception.Response.StatusCode.Value__ } else { 0 }
+        }
+    }
 }
 
 # Main execution
@@ -169,15 +194,14 @@ while ($true) {
     }
     
     Write-ColorOutput "`nQuantum Random UUIDs (v4):" -Color $Colors.Success
-    for ($i = 0; $i -lt $UUIDsPerCycle; $i++) {
-        $result = Get-RandomData -Url $GatewayUrl -Key $ApiKey -ByteCount 16 -Format "hex"
-        
-        if ($result.Success) {
-            $uuid = New-UUID -RandomBytes $result.Data
-            Write-ColorOutput "  [$($i + 1)] $uuid" -Color $Colors.Data
-        } else {
-            Write-ColorOutput "  [$($i + 1)] Error: $($result.Error)" -Color $Colors.Error
+    $result = Get-UUIDs -Url $GatewayUrl -Key $ApiKey -Count $UUIDsPerCycle
+    
+    if ($result.Success) {
+        for ($i = 0; $i -lt $result.Data.Count; $i++) {
+            Write-ColorOutput "  [$($i + 1)] $($result.Data[$i])" -Color $Colors.Data
         }
+    } else {
+        Write-ColorOutput "  Error fetching UUIDs: $($result.Error)" -Color $Colors.Error
     }
     
     Write-ColorOutput "`nNext update in $IntervalSeconds seconds..." -Color $Colors.Info
