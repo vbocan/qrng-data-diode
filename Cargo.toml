@@ -6,6 +6,9 @@ members = [
     "qrng-gateway",
     "qrng-mcp",
 ]
+exclude = [
+    "examples/*",
+]
 
 [workspace.package]
 version = "0.1.0"

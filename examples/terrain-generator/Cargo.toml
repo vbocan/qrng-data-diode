@@ -1,0 +1,12 @@
+[package]
+name = "terrain-generator"
+version = "0.1.0"
+edition = "2021"
+
+[workspace]
+
+[dependencies]
+reqwest = { version = "0.12", features = ["blocking"] }
+clap = { version = "4.5", features = ["derive"] }
+hex = "0.4"
+noise = "0.9"
