@@ -5,10 +5,15 @@ edition.workspace = true
 license.workspace = true
 authors.workspace = true
 
+[[bin]]
+name = "qrng-mcp"
+path = "src/main.rs"
+
 [dependencies]
 qrng-core = { path = "../qrng-core" }
-rmcp = { version = "0.8.5", features = ["server", "transport-sse-server", "macros"] }
+rmcp = { version = "0.8.5", features = ["server", "transport-sse-server", "transport-streamable-http-server", "macros"] }
 tokio = { workspace = true }
+tokio-util = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 anyhow = { workspace = true }
@@ -17,5 +22,11 @@ base64 = "0.22"
 hex = "0.4"
 schemars = { version = "1.0", features = ["chrono04"] }
 tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+reqwest = { workspace = true }
+axum = "0.8"
+tower = "0.5"
+http = "1.2"
+http-body-util = "0.1"
 
 [dev-dependencies]
