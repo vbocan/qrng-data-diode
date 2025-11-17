@@ -141,6 +141,47 @@ fn default_encoding() -> String {
     "hex".to_string()
 }
 
+/// Query parameters for /api/integers endpoint
+#[derive(serde::Deserialize)]
+struct IntegersQuery {
+    count: usize,
+    #[serde(default = "default_min")]
+    min: i64,
+    #[serde(default = "default_max")]
+    max: i64,
+    #[serde(default)]
+    api_key: Option<String>,
+}
+
+fn default_min() -> i64 {
+    0
+}
+
+fn default_max() -> i64 {
+    100
+}
+
+/// Query parameters for /api/floats endpoint
+#[derive(serde::Deserialize)]
+struct FloatsQuery {
+    count: usize,
+    #[serde(default)]
+    api_key: Option<String>,
+}
+
+/// Query parameters for /api/uuid endpoint
+#[derive(serde::Deserialize)]
+struct UuidQuery {
+    #[serde(default = "default_uuid_count")]
+    count: usize,
+    #[serde(default)]
+    api_key: Option<String>,
+}
+
+fn default_uuid_count() -> usize {
+    1
+}
+
 /// GET /api/random - Serve random entropy
 async fn serve_random(
     State(state): State<AppState>,
@@ -248,6 +289,206 @@ async fn health_check(State(state): State<AppState>) -> StatusCode {
     } else {
         StatusCode::SERVICE_UNAVAILABLE
     }
+}
+
+/// GET /api/integers - Generate random integers in range
+async fn serve_integers(
+    State(state): State<AppState>,
+    Query(params): Query<IntegersQuery>,
+    headers: HeaderMap,
+) -> Result<Response, StatusCode> {
+    let start = Instant::now();
+
+    // Extract and validate API key
+    let api_key = if let Some(key) = params.api_key {
+        if state.config.api_keys.contains(&key) {
+            key
+        } else {
+            return Err(StatusCode::UNAUTHORIZED);
+        }
+    } else {
+        extract_api_key(&headers, &state.config)?
+    };
+
+    // Rate limiting
+    if !state.rate_limiter.check(&api_key) {
+        state.metrics.record_request_failure();
+        return Err(StatusCode::TOO_MANY_REQUESTS);
+    }
+
+    // Validate parameters
+    if params.count == 0 || params.count > 1000 {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+
+    if params.min >= params.max {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+
+    let range = (params.max - params.min + 1) as u64;
+
+    // Get entropy from buffer (8 bytes per integer)
+    let bytes_needed = params.count * 8;
+    let data = state.buffer.pop(bytes_needed)
+        .ok_or_else(|| {
+            state.metrics.record_request_failure();
+            StatusCode::SERVICE_UNAVAILABLE
+        })?;
+
+    // Convert bytes to integers
+    let mut integers = Vec::with_capacity(params.count);
+    for chunk in data.chunks_exact(8) {
+        let mut bytes = [0u8; 8];
+        bytes.copy_from_slice(chunk);
+        let value = u64::from_le_bytes(bytes);
+        let result = params.min + (value % range) as i64;
+        integers.push(result);
+    }
+
+    // Record metrics
+    let latency = start.elapsed().as_micros() as u64;
+    state.metrics.record_request(bytes_needed, latency);
+
+    // Return as JSON array
+    Ok((
+        StatusCode::OK,
+        [(hyper::header::CONTENT_TYPE, "application/json")],
+        serde_json::to_string(&integers).unwrap(),
+    )
+        .into_response())
+}
+
+/// GET /api/floats - Generate random floats in [0, 1)
+async fn serve_floats(
+    State(state): State<AppState>,
+    Query(params): Query<FloatsQuery>,
+    headers: HeaderMap,
+) -> Result<Response, StatusCode> {
+    let start = Instant::now();
+
+    // Extract and validate API key
+    let api_key = if let Some(key) = params.api_key {
+        if state.config.api_keys.contains(&key) {
+            key
+        } else {
+            return Err(StatusCode::UNAUTHORIZED);
+        }
+    } else {
+        extract_api_key(&headers, &state.config)?
+    };
+
+    // Rate limiting
+    if !state.rate_limiter.check(&api_key) {
+        state.metrics.record_request_failure();
+        return Err(StatusCode::TOO_MANY_REQUESTS);
+    }
+
+    // Validate parameters
+    if params.count == 0 || params.count > 1000 {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+
+    // Get entropy from buffer (8 bytes per float)
+    let bytes_needed = params.count * 8;
+    let data = state.buffer.pop(bytes_needed)
+        .ok_or_else(|| {
+            state.metrics.record_request_failure();
+            StatusCode::SERVICE_UNAVAILABLE
+        })?;
+
+    // Convert bytes to floats using proper precision
+    let mut floats = Vec::with_capacity(params.count);
+    for chunk in data.chunks_exact(8) {
+        let mut bytes = [0u8; 8];
+        bytes.copy_from_slice(chunk);
+        let random_u64 = u64::from_le_bytes(bytes);
+        // Use only top 53 bits to avoid rounding bias (same as Monte Carlo)
+        let float = (random_u64 >> 11) as f64 * (1.0 / (1u64 << 53) as f64);
+        floats.push(float);
+    }
+
+    // Record metrics
+    let latency = start.elapsed().as_micros() as u64;
+    state.metrics.record_request(bytes_needed, latency);
+
+    // Return as JSON array
+    Ok((
+        StatusCode::OK,
+        [(hyper::header::CONTENT_TYPE, "application/json")],
+        serde_json::to_string(&floats).unwrap(),
+    )
+        .into_response())
+}
+
+/// GET /api/uuid - Generate UUID v4
+async fn serve_uuid(
+    State(state): State<AppState>,
+    Query(params): Query<UuidQuery>,
+    headers: HeaderMap,
+) -> Result<Response, StatusCode> {
+    let start = Instant::now();
+
+    // Extract and validate API key
+    let api_key = if let Some(key) = params.api_key {
+        if state.config.api_keys.contains(&key) {
+            key
+        } else {
+            return Err(StatusCode::UNAUTHORIZED);
+        }
+    } else {
+        extract_api_key(&headers, &state.config)?
+    };
+
+    // Rate limiting
+    if !state.rate_limiter.check(&api_key) {
+        state.metrics.record_request_failure();
+        return Err(StatusCode::TOO_MANY_REQUESTS);
+    }
+
+    // Validate parameters
+    if params.count == 0 || params.count > 100 {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+
+    // Get entropy from buffer (16 bytes per UUID)
+    let bytes_needed = params.count * 16;
+    let data = state.buffer.pop(bytes_needed)
+        .ok_or_else(|| {
+            state.metrics.record_request_failure();
+            StatusCode::SERVICE_UNAVAILABLE
+        })?;
+
+    // Convert bytes to UUIDs
+    let mut uuids = Vec::with_capacity(params.count);
+    for chunk in data.chunks_exact(16) {
+        let mut bytes = [0u8; 16];
+        bytes.copy_from_slice(chunk);
+        
+        // Set version (4) and variant (RFC 4122)
+        bytes[6] = (bytes[6] & 0x0f) | 0x40;
+        bytes[8] = (bytes[8] & 0x3f) | 0x80;
+        
+        let uuid = uuid::Uuid::from_bytes(bytes);
+        uuids.push(uuid.to_string());
+    }
+
+    // Record metrics
+    let latency = start.elapsed().as_micros() as u64;
+    state.metrics.record_request(bytes_needed, latency);
+
+    // Return as single string or JSON array
+    let response_body = if params.count == 1 {
+        uuids[0].clone()
+    } else {
+        serde_json::to_string(&uuids).unwrap()
+    };
+
+    Ok((
+        StatusCode::OK,
+        [(hyper::header::CONTENT_TYPE, if params.count == 1 { "text/plain" } else { "application/json" })],
+        response_body,
+    )
+        .into_response())
 }
 
 /// GET /metrics - Prometheus metrics
@@ -575,6 +816,9 @@ async fn main() -> Result<()> {
     // Build HTTP router for gateway API
     let app = Router::new()
         .route("/api/random", get(serve_random))
+        .route("/api/integers", get(serve_integers))
+        .route("/api/floats", get(serve_floats))
+        .route("/api/uuid", get(serve_uuid))
         .route("/api/status", get(get_status))
         .route("/api/test/monte-carlo", post(monte_carlo_test))
         .route("/health", get(health_check))

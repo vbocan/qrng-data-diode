@@ -3,9 +3,9 @@
 //! Runs the MCP server with both SSE and Streamable HTTP transports
 //! for integration with Claude Desktop and LM Studio.
 //! 
-//! Fetches quantum entropy from the QRNG Gateway's REST API.
+//! This is a thin AI-friendly wrapper around the QRNG Gateway API.
+//! It has no local buffer or QRNG logic - all operations are delegated to the gateway.
 
-use qrng_core::buffer::EntropyBuffer;
 use qrng_mcp::QrngMcpServer;
 use rmcp::transport::streamable_http_server::{
     session::local::LocalSessionManager, tower::StreamableHttpService,
@@ -13,7 +13,6 @@ use rmcp::transport::streamable_http_server::{
 };
 use std::net::SocketAddr;
 use std::sync::Arc;
-use std::time::Duration;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 use axum::{Router, routing::{get, post, delete}};
 
@@ -42,35 +41,13 @@ async fn main() -> anyhow::Result<()> {
         .expect("QRNG_GATEWAY_API_KEY must be set");
 
     tracing::info!("Gateway URL: {}", gateway_url);
-
-    // Create entropy buffer (10 MB capacity)
-    let buffer = EntropyBuffer::new(10 * 1024 * 1024);
-    
-    // Start background task to fetch entropy from gateway
-    tracing::info!("Starting entropy fetcher from gateway...");
-    let buffer_fetcher = buffer.clone();
-    let gateway_url_fetcher = gateway_url.clone();
-    let api_key_fetcher = gateway_api_key.clone();
-    
-    tokio::spawn(async move {
-        fetch_entropy_loop(buffer_fetcher, gateway_url_fetcher, api_key_fetcher).await;
-    });
-    
-    // Wait a moment for initial buffer fill
-    tokio::time::sleep(Duration::from_secs(2)).await;
-    
-    tracing::info!(
-        "Buffer initialized: {} bytes available",
-        buffer.len()
-    );
+    tracing::info!("MCP server will forward all requests to the gateway");
 
     // Create the service factory for both transports
-    let buffer_clone = buffer.clone();
     let gateway_url_clone = gateway_url.clone();
     let gateway_api_key_clone = gateway_api_key.clone();
     let service_factory = move || {
-        Ok::<_, std::io::Error>(QrngMcpServer::with_gateway(
-            buffer_clone.clone(),
+        Ok::<_, std::io::Error>(QrngMcpServer::new(
             gateway_url_clone.clone(),
             gateway_api_key_clone.clone(),
         ))
@@ -146,92 +123,4 @@ async fn legacy_message_handler(
 ) -> Result<axum::response::Response, axum::http::StatusCode> {
     tracing::warn!("Legacy /message endpoint called - not fully implemented");
     Err(axum::http::StatusCode::NOT_IMPLEMENTED)
-}
-
-/// Continuously fetch entropy from gateway and fill buffer
-async fn fetch_entropy_loop(buffer: EntropyBuffer, gateway_url: String, api_key: String) {
-    let client = reqwest::Client::builder()
-        .timeout(Duration::from_secs(10))
-        .build()
-        .expect("Failed to create HTTP client");
-    
-    let mut fetch_interval = tokio::time::interval(Duration::from_millis(100));
-    let mut backoff_duration = Duration::from_secs(1);
-    
-    loop {
-        fetch_interval.tick().await;
-        
-        // Check if buffer needs filling
-        let fill_percent = buffer.fill_percent();
-        if fill_percent > 80.0 {
-            continue; // Buffer sufficiently full
-        }
-        
-        // Calculate how much to fetch
-        let available = buffer.len();
-        let capacity = buffer.capacity();
-        let needed = capacity - available;
-        let fetch_size = needed.min(65536); // Fetch up to 64KB at a time
-        
-        if fetch_size < 1024 {
-            continue; // Not worth fetching
-        }
-        
-        // Fetch from gateway
-        let url = format!("{}/api/random?bytes={}&encoding=hex", gateway_url, fetch_size);
-        
-        match client
-            .get(&url)
-            .header("Authorization", format!("Bearer {}", api_key))
-            .send()
-            .await
-        {
-            Ok(response) => {
-                if response.status().is_success() {
-                    match response.text().await {
-                        Ok(hex_data) => {
-                            match hex::decode(&hex_data) {
-                                Ok(bytes) => {
-                                    if let Err(e) = buffer.push(bytes.clone()) {
-                                        tracing::error!("Failed to push to buffer: {}", e);
-                                    } else {
-                                        tracing::debug!(
-                                            "Fetched {} bytes from gateway, buffer: {:.1}%",
-                                            bytes.len(),
-                                            buffer.fill_percent()
-                                        );
-                                        // Reset backoff on success
-                                        backoff_duration = Duration::from_secs(1);
-                                    }
-                                }
-                                Err(e) => {
-                                    tracing::error!("Failed to decode hex data: {}", e);
-                                }
-                            }
-                        }
-                        Err(e) => {
-                            tracing::error!("Failed to read response: {}", e);
-                        }
-                    }
-                } else {
-                    tracing::warn!(
-                        "Gateway returned error: {} - backing off for {:?}",
-                        response.status(),
-                        backoff_duration
-                    );
-                    tokio::time::sleep(backoff_duration).await;
-                    backoff_duration = (backoff_duration * 2).min(Duration::from_secs(60));
-                }
-            }
-            Err(e) => {
-                tracing::error!(
-                    "Failed to fetch from gateway: {} - backing off for {:?}",
-                    e,
-                    backoff_duration
-                );
-                tokio::time::sleep(backoff_duration).await;
-                backoff_duration = (backoff_duration * 2).min(Duration::from_secs(60));
-            }
-        }
-    }
 }

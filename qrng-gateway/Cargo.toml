@@ -28,4 +28,5 @@ chrono = { workspace = true }
 hex = "0.4"
 parking_lot = { workspace = true }
 rand = { workspace = true }
+uuid = { workspace = true }
 futures = "0.3"
