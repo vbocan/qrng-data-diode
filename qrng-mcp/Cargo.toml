@@ -10,20 +10,17 @@ name = "qrng-mcp"
 path = "src/main.rs"
 
 [dependencies]
-qrng-core = { path = "../qrng-core" }
+# No qrng-core dependency - MCP is a thin wrapper with no QRNG logic
 rmcp = { version = "0.8.5", features = ["server", "transport-sse-server", "transport-streamable-http-server", "macros"] }
 tokio = { workspace = true }
 tokio-util = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 anyhow = { workspace = true }
-uuid = { workspace = true }
-base64 = "0.22"
-hex = "0.4"
+reqwest = { workspace = true }
 schemars = { version = "1.0", features = ["chrono04"] }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
-reqwest = { workspace = true }
 axum = "0.8"
 tower = "0.5"
 http = "1.2"
