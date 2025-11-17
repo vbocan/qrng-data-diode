@@ -52,27 +52,44 @@ All examples share these common options:
 
 ## Prerequisites
 
-You need access to a running QRNG Gateway. There are several options:
+You need access to a running QRNG Gateway. Choose **one** of the following options based on your setup:
 
-### Option 1: Local Gateway (requires QRNG hardware)
-If you have a QRNG appliance, run the gateway locally:
+### Option 1: Local Gateway with Quantis Appliance (Recommended for Production)
+
+If you have access to a Quantis QRNG appliance on your network, run both the collector and gateway locally using Docker Compose:
 
 ```bash
+# From the project root directory
 docker-compose up -d qrng-gateway qrng-collector
 ```
 
-### Option 2: Public Gateway
-A public QRNG gateway is available at:
-- **URL**: `http://qrng.dataman.ro:7764`
-- **API Key**: Contact the service administrator for access
+This starts:
+- **qrng-collector**: Fetches quantum random data from your Quantis appliance and pushes it to the gateway
+- **qrng-gateway**: Serves the random data via REST API on `localhost:7764`
 
-To use the public gateway, pass the URL to examples:
+The collector will automatically connect to the Quantis appliance URL configured in the docker-compose.yml (default: `https://random.cs.upt.ro/api/2.0/streambytes`). Update this URL to match your appliance's address if needed.
+
+Once running, examples use the default settings (no additional arguments needed):
 ```bash
-cargo run --release -- --gateway-url http://qrng.dataman.ro:7764 --api-key YOUR_KEY
+cargo run --release
 ```
 
-### Option 3: Mock/Test Gateway
-For development and testing without QRNG hardware, you can run the gateway in mock mode (see main project documentation).
+### Option 2: Public Gateway (No Hardware Required)
+
+If you **do not** have access to a Quantis QRNG appliance, you can use the public QRNG gateway:
+
+- **URL**: `https://qrng.dataman.ro`
+- **API Key**: `test-key-1234567890`
+
+This public gateway provides genuine quantum random numbers from a remote Quantis appliance. To use it, specify the gateway URL when running examples:
+
+```bash
+cargo run --release -- --gateway-url https://qrng.dataman.ro
+```
+
+Since the default API key (`test-key-1234567890`) matches the public gateway's key, you only need to specify the gateway URL.
+
+**Note**: The public gateway is suitable for testing, development, and educational purposes. For production use with high-volume requirements, consider setting up your own local gateway with a Quantis appliance.
 
 **Note**: Without access to a QRNG Gateway (local or remote), these examples will not function.
 
