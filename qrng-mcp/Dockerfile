@@ -1,5 +1,5 @@
-# Multi-stage build for QRNG Gateway
-# Build from workspace root: docker build -f qrng-gateway/Dockerfile -t qrng-gateway .
+# Multi-stage build for QRNG MCP Server
+# Build from workspace root: docker build -f qrng-mcp/Dockerfile -t qrng-mcp .
 
 # Stage 1: Builder
 FROM rust:bookworm AS builder
@@ -21,7 +21,7 @@ COPY qrng-gateway ./qrng-gateway
 COPY qrng-mcp ./qrng-mcp
 
 # Build release binary
-RUN cargo build --release --bin qrng-gateway
+RUN cargo build --release --bin qrng-mcp
 
 # Stage 2: Runtime
 FROM debian:bookworm-slim
@@ -30,7 +30,6 @@ FROM debian:bookworm-slim
 RUN apt-get update && apt-get install -y \
     ca-certificates \
     libssl3 \
-    curl \
     && rm -rf /var/lib/apt/lists/*
 
 # Create non-root user
@@ -42,15 +41,15 @@ RUN useradd -m -u 1000 -s /bin/bash qrng && \
 WORKDIR /app
 
 # Copy binary from builder
-COPY --from=builder --chown=qrng:qrng /build/target/release/qrng-gateway /app/qrng-gateway
+COPY --from=builder --chown=qrng:qrng /build/target/release/qrng-mcp /app/qrng-mcp
 
 # Switch to non-root user
 USER qrng
 
-# Expose HTTP port (gateway API)
-EXPOSE 7764
+# Expose HTTP port
+EXPOSE 8080
 
 # Set environment variables
-ENV RUST_LOG=info
+ENV RUST_LOG=qrng_mcp=info,rmcp=info
 
-CMD ["/app/qrng-gateway", "--log-level", "info"]
+CMD ["/app/qrng-mcp"]

@@ -27,15 +27,10 @@ use qrng_core::{
     metrics::Metrics,
     protocol::{EncodingFormat, EntropyPacket, GatewayStatus, HealthStatus},
 };
-use qrng_mcp::QrngMcpServer;
-use rmcp::{
-    RoleServer, ServiceExt,
-    transport::sse_server::{SseServer, SseServerConfig},
-};
 use serde::{Deserialize, Serialize};
 use std::net::SocketAddr;
 use std::sync::Arc;
-use std::time::{Duration, Instant};
+use std::time::Instant;
 use tokio_util::sync::CancellationToken;
 use tower_http::cors::CorsLayer;
 use tracing::{error, info, warn};
@@ -281,6 +276,8 @@ struct MonteCarloResult {
     error_percent: f64,
     iterations: u64,
     convergence_rate: String,
+    quality_assessment: String,
+    note: String,
     quantum_vs_pseudo: Option<PseudoComparison>,
 }
 
@@ -357,7 +354,17 @@ async fn monte_carlo_test(
         "poor".to_string()
     };
 
-    // Compare with pseudo-random (optional, for demonstration)
+    let quality_assessment = if quantum_error_percent < 0.1 {
+        "high_quality".to_string()
+    } else if quantum_error_percent < 1.0 {
+        "acceptable".to_string()
+    } else {
+        "poor_quality".to_string()
+    };
+
+    // Compare with pseudo-random (for statistical demonstration only)
+    // Note: Pseudo-random can occasionally produce better Monte Carlo estimates
+    // due to statistical variance, but lacks cryptographic unpredictability
     let comparison = if params.iterations <= 1_000_000 {
         // Generate pseudo-random for comparison
         use rand::Rng;
@@ -393,6 +400,8 @@ async fn monte_carlo_test(
         error_percent: quantum_error_percent,
         iterations: params.iterations,
         convergence_rate,
+        quality_assessment,
+        note: "Monte Carlo tests measure statistical uniformity, not cryptographic security. Both quantum and pseudo-random can pass these tests, but only quantum provides true unpredictability.".to_string(),
         quantum_vs_pseudo: comparison,
     }))
 }
@@ -420,32 +429,6 @@ fn estimate_pi(floats: &[f64]) -> f64 {
     4.0 * (inside_circle as f64) / (pairs as f64)
 }
 
-<<<<<<< Updated upstream
-/// POST /mcp - Handle MCP requests over HTTP (no authentication required)
-async fn handle_mcp(
-    State(state): State<AppState>,
-    Json(request): Json<serde_json::Value>,
-) -> Result<Json<serde_json::Value>, AppError> {
-    // MCP endpoint is open - no authentication required
-    // This allows free access for AI agents and applications
-
-    // Convert request to string for MCP handler
-    let request_str = serde_json::to_string(&request)
-        .map_err(|e| AppError(StatusCode::BAD_REQUEST, format!("Invalid JSON: {}", e)))?;
-
-    // Handle MCP request
-    let response_str = state.mcp_server.handle_request(&request_str)
-        .map_err(|e| AppError(StatusCode::INTERNAL_SERVER_ERROR, format!("MCP error: {}", e)))?;
-
-    // Parse response back to JSON
-    let response: serde_json::Value = serde_json::from_str(&response_str)
-        .map_err(|e| AppError(StatusCode::INTERNAL_SERVER_ERROR, format!("Invalid response: {}", e)))?;
-
-    Ok(Json(response))
-}
-
-=======
->>>>>>> Stashed changes
 /// POST /push - Receive entropy packets (push mode only)
 async fn receive_push(
     State(state): State<AppState>,
@@ -571,10 +554,6 @@ async fn main() -> Result<()> {
         None
     };
 
-    // Create MCP server using official rmcp SDK
-    info!("Initializing MCP server");
-    let mcp_server = QrngMcpServer::new(buffer.clone());
-
     // Create application state
     let state = AppState {
         config: config.clone(),
@@ -593,31 +572,10 @@ async fn main() -> Result<()> {
     let cancel_token = CancellationToken::new();
     let cancel_token_signal = cancel_token.clone();
 
-    // Configure SSE server for MCP on separate port
-    let mcp_addr: SocketAddr = format!("{}:8081", addr.ip()).parse()
-        .context("Invalid MCP address")?;
-    
-    let sse_config = SseServerConfig {
-        bind: mcp_addr,
-        sse_path: "/sse".to_string(),      // SSE stream endpoint
-        post_path: "/message".to_string(),  // POST message endpoint  
-        ct: cancel_token.clone(),
-        sse_keep_alive: Some(Duration::from_secs(15)),
-    };
-
-    // Create and start SSE server for MCP
-    let (sse_server, _sse_router) = SseServer::new(sse_config);
-    sse_server.with_service(move || mcp_server.clone());
-
-    info!("MCP server starting on {}", mcp_addr);
-    info!("MCP SSE endpoint: http://{}/sse", mcp_addr);
-    info!("MCP POST endpoint: http://{}/message", mcp_addr);
-
-    // Build main HTTP router for gateway API (no MCP routes)
+    // Build HTTP router for gateway API
     let app = Router::new()
         .route("/api/random", get(serve_random))
         .route("/api/status", get(get_status))
-        .route("/mcp", post(handle_mcp))
         .route("/api/test/monte-carlo", post(monte_carlo_test))
         .route("/health", get(health_check))
         .route("/metrics", get(get_metrics))

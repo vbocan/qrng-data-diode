@@ -85,6 +85,40 @@ services:
         max-size: "10m"
         max-file: "3"
 
+  qrng-mcp:
+    build:
+      context: .
+      dockerfile: qrng-mcp/Dockerfile
+    image: ghcr.io/vbocan/qrng-mcp:latest
+    container_name: qrng-mcp
+    restart: unless-stopped
+
+    # Environment variables
+    environment:
+      - MCP_BIND_ADDR=0.0.0.0:8080
+      - QRNG_GATEWAY_URL=http://qrng-gateway:7764
+      - QRNG_GATEWAY_API_KEY=test-key-1234567890
+      - RUST_LOG=qrng_mcp=info,rmcp=info
+
+    # Port mapping
+    ports:
+      - "50101:8080"
+
+    # Depends on gateway
+    depends_on:
+      - qrng-gateway
+
+    # Network configuration
+    networks:
+      - qrng-network
+
+    # Logging configuration
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
 networks:
   qrng-network:
     driver: bridge
