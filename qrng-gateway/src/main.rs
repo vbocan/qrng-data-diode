@@ -779,12 +779,16 @@ async fn main() -> Result<()> {
     
     info!("Listen address: {}", config.listen_address);
 
-    // Create buffer
+    // Create buffer with overflow policy
     let buffer = if let Some(ttl) = config.buffer_ttl() {
         EntropyBuffer::with_ttl(config.buffer_size, ttl)
+            .with_overflow_policy(config.overflow_policy())
     } else {
         EntropyBuffer::new(config.buffer_size)
+            .with_overflow_policy(config.overflow_policy())
     };
+
+    info!("Buffer overflow policy: {:?}", config.overflow_policy());
 
     // Create signer for push mode
     let signer = if let Some(key) = config.hmac_secret_key.as_ref() {

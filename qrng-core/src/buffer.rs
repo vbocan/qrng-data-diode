@@ -41,6 +41,7 @@ struct BufferInner {
     max_size: usize,
     current_size: usize,
     ttl: Option<Duration>,
+    overflow_policy: OverflowPolicy,
     stats: BufferStats,
 }
 
@@ -63,6 +64,15 @@ pub enum WatermarkLevel {
     Critical, // > 95%
 }
 
+/// Buffer overflow policy when buffer is full
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum OverflowPolicy {
+    /// Discard incoming data when buffer is full (default)
+    Discard,
+    /// Replace oldest data with incoming data (FIFO eviction)
+    Replace,
+}
+
 impl EntropyBuffer {
     /// Create a new buffer with specified capacity
     pub fn new(max_size: usize) -> Self {
@@ -72,6 +82,7 @@ impl EntropyBuffer {
                 max_size,
                 current_size: 0,
                 ttl: None,
+                overflow_policy: OverflowPolicy::Discard,
                 stats: BufferStats::default(),
             })),
         }
@@ -82,6 +93,12 @@ impl EntropyBuffer {
         let buffer = Self::new(max_size);
         buffer.inner.write().ttl = Some(ttl);
         buffer
+    }
+
+    /// Set buffer overflow policy
+    pub fn with_overflow_policy(self, policy: OverflowPolicy) -> Self {
+        self.inner.write().overflow_policy = policy;
+        self
     }
 
     /// Push entropy data into buffer
@@ -106,12 +123,27 @@ impl EntropyBuffer {
         // Calculate available space
         let available_space = inner.max_size.saturating_sub(inner.current_size);
         
-        // If buffer is full, nothing can be stored
-        if available_space == 0 {
-            return Ok(0);
+        // Handle overflow based on policy
+        match inner.overflow_policy {
+            OverflowPolicy::Discard => {
+                // Discard policy: only use available space
+                if available_space == 0 {
+                    return Ok(0);
+                }
+            }
+            OverflowPolicy::Replace => {
+                // Replace policy: evict oldest data if needed to fit incoming data
+                if available_space < data_len {
+                    let bytes_needed = data_len - available_space;
+                    inner.evict_oldest(bytes_needed);
+                }
+            }
         }
 
-        // Fill buffer to maximum capacity, discarding overflow
+        // Recalculate available space after potential eviction
+        let available_space = inner.max_size.saturating_sub(inner.current_size);
+        
+        // Fill buffer to maximum capacity
         // For random entropy, packet boundaries are arbitrary
         let bytes_to_push = data_len.min(available_space);
         let data_to_push = data.slice(0..bytes_to_push);
@@ -272,6 +304,18 @@ impl BufferInner {
             }
         }
     }
+
+    fn evict_oldest(&mut self, bytes_needed: usize) {
+        let mut bytes_freed = 0;
+        
+        while bytes_freed < bytes_needed && !self.entries.is_empty() {
+            if let Some(entry) = self.entries.pop_front() {
+                bytes_freed += entry.data.len();
+                self.current_size -= entry.data.len();
+                self.stats.evictions_overflow += 1;
+            }
+        }
+    }
 }
 
 #[cfg(test)]
@@ -290,7 +334,7 @@ mod tests {
     }
 
     #[test]
-    fn test_buffer_full_behavior() {
+    fn test_buffer_full_discard_policy() {
         let buffer = EntropyBuffer::new(10);
         buffer.push(vec![1; 8]).unwrap();
         assert_eq!(buffer.len(), 8);
@@ -300,7 +344,7 @@ mod tests {
         assert_eq!(pushed, 2); // Only 2 bytes fit
         assert_eq!(buffer.len(), 10);
         
-        // When buffer is full, new packets are discarded
+        // When buffer is full, new packets are discarded (default policy)
         let pushed = buffer.push(vec![3; 5]).unwrap();
         assert_eq!(pushed, 0); // Nothing stored
         assert_eq!(buffer.len(), 10);
@@ -309,6 +353,31 @@ mod tests {
         let data = buffer.pop(10).unwrap();
         assert_eq!(&data[0..8], &[1; 8]);
         assert_eq!(&data[8..10], &[2; 2]);
+    }
+
+    #[test]
+    fn test_buffer_full_replace_policy() {
+        let buffer = EntropyBuffer::new(10)
+            .with_overflow_policy(OverflowPolicy::Replace);
+        
+        // Fill buffer with two separate pushes to create multiple entries
+        buffer.push(vec![1; 5]).unwrap();
+        buffer.push(vec![1; 5]).unwrap();
+        assert_eq!(buffer.len(), 10);
+        
+        // Push new data - should evict oldest entry (5 bytes) and accept new
+        let pushed = buffer.push(vec![2; 5]).unwrap();
+        assert_eq!(pushed, 5); // All 5 bytes accepted
+        assert_eq!(buffer.len(), 10); // Still full
+        
+        // Verify oldest entry was replaced
+        let data = buffer.pop(10).unwrap();
+        assert_eq!(&data[0..5], &[1; 5]); // Second entry from original
+        assert_eq!(&data[5..10], &[2; 5]); // New data
+        
+        // Verify stats
+        let stats = buffer.stats();
+        assert_eq!(stats.evictions_overflow, 1); // One entry evicted
     }
 
     #[test]
