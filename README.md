@@ -93,7 +93,7 @@ cargo test -p qrng-mcp
 - **Comparison**: 6-124x faster latency than ANU QRNG, NIST Beacon
 - **Scaling**: Linear throughput scaling with multiple QRNG appliances
 
-See [Performance Testing](docs/PERFORMANCE_TESTING.md) for detailed methodology, results, and analysis.
+See [Performance Benchmarks](docs/BENCHMARK.md) for detailed methodology, results, and analysis.
 
 ## Technology Stack
 
@@ -140,17 +140,14 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## Documentation
 
-- **User Guide**: [docs/USAGE_GUIDE.md](docs/USAGE_GUIDE.md)
 - **Architecture**: Detailed technical architecture in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
-- **Docker Deployment**: [docs/DOCKER_DEPLOYMENT.md](docs/DOCKER_DEPLOYMENT.md)
-- **MCP Integration**: [docs/mcp_integration.md](docs/mcp_integration.md)
+- **MCP Integration**: AI agent integration guide in [docs/MCP-INTEGRATION.md](docs/MCP-INTEGRATION.md)
+- **Security Analysis**: Comprehensive security architecture in [docs/SECURITY-ANALYSIS.md](docs/SECURITY-ANALYSIS.md)
 
 ### Academic & Research Documentation
 
-- **SoftwareX Manuscript**: [docs/SOFTWAREX_MANUSCRIPT.md](docs/SOFTWAREX_MANUSCRIPT.md)
-- **Performance Benchmarks**: [docs/performance_benchmarks.md](docs/performance_benchmarks.md)
-- **Security Analysis**: [docs/security_analysis.md](docs/security_analysis.md)
-- **Comparison Tables**: [docs/comparison_table.md](docs/comparison_table.md)
+- **SoftwareX Manuscript**: Academic publication draft in [docs/SOFTWAREX_MANUSCRIPT.md](docs/SOFTWAREX_MANUSCRIPT.md)
+- **Performance Benchmarks**: Detailed performance testing and analysis in [docs/BENCHMARK.md](docs/BENCHMARK.md)
 
 ## Support & Contact
 
