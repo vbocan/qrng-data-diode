@@ -193,6 +193,13 @@ fn default_uuid_count() -> usize {
     1
 }
 
+/// Query parameters for /api/status endpoint
+#[derive(serde::Deserialize)]
+struct StatusQuery {
+    #[serde(default)]
+    api_key: Option<String>,
+}
+
 /// GET /api/random - Serve random entropy
 async fn serve_random(
     State(state): State<AppState>,
@@ -256,9 +263,19 @@ async fn serve_random(
 /// GET /api/status - System status
 async fn get_status(
     State(state): State<AppState>,
+    Query(params): Query<StatusQuery>,
     headers: HeaderMap,
 ) -> Result<Json<GatewayStatus>, StatusCode> {
-    extract_api_key(&headers, &state.config)?;
+    // Extract API key (from header or query param)
+    let _api_key = if let Some(key) = params.api_key {
+        if state.config.api_keys.contains(&key) {
+            key
+        } else {
+            return Err(StatusCode::UNAUTHORIZED);
+        }
+    } else {
+        extract_api_key(&headers, &state.config)?
+    };
 
     let fill_percent = state.buffer.fill_percent();
     let status = if fill_percent < 10.0 {
