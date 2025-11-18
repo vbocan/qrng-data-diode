@@ -214,7 +214,7 @@ This research received no specific grant from any funding agency.
 | **Compilation requirements** | Rust 1.75+ toolchain, OpenSSL development libraries, Docker & Docker Compose (optional) |
 | **Operating environments** | Linux, macOS, Windows |
 | **Dependencies** | tokio 1.35 (async runtime), axum 0.7 (HTTP server), bytes 1.5 (zero-copy buffers), parking_lot 0.12 (locks), serde 1.0 (serialization), hmac 0.12 + sha2 0.10 (cryptography), crc32fast 1.3 (checksums), prometheus 0.13 (metrics), tracing 0.1 (logging) |
-| **Link to developer documentation** | [Developer Guide](https://github.com/vbocan/qrng-data-diode/blob/master/docs/USAGE_GUIDE.md) |
+| **Link to developer documentation** | [Developer Guide](https://github.com/vbocan/qrng-data-diode/blob/master/README.md) |
 | **Support email** | valer.bocan@upt.ro |
 
 ---
@@ -227,11 +227,9 @@ This research received no specific grant from any funding agency.
 - **Documentation**: https://github.com/vbocan/qrng-data-diode/tree/master/docs
 - **Supplementary Materials**:
   - Architecture Documentation: [docs/ARCHITECTURE.md](https://github.com/vbocan/qrng-data-diode/blob/master/docs/ARCHITECTURE.md)
-  - Performance Testing: [docs/PERFORMANCE_TESTING.md](https://github.com/vbocan/qrng-data-diode/blob/master/docs/PERFORMANCE_TESTING.md)
-  - Security Analysis: [docs/security_analysis.md](https://github.com/vbocan/qrng-data-diode/blob/master/docs/security_analysis.md)
-  - MCP Integration Guide: [docs/mcp_integration.md](https://github.com/vbocan/qrng-data-diode/blob/master/docs/mcp_integration.md)
-  - Comparison Tables: [docs/comparison_table.md](https://github.com/vbocan/qrng-data-diode/blob/master/docs/comparison_table.md)
-  - Usage Guide: [docs/USAGE_GUIDE.md](https://github.com/vbocan/qrng-data-diode/blob/master/docs/USAGE_GUIDE.md)
+  - Performance Testing: [docs/BENCHMARK.md](https://github.com/vbocan/qrng-data-diode/blob/master/docs/BENCHMARK.md)
+  - Security Analysis: [docs/SECURITY-ANALYSIS.md](https://github.com/vbocan/qrng-data-diode/blob/master/docs/SECURITY-ANALYSIS.md)
+  - MCP Integration Guide: [docs/MCP-INTEGRATION.md](https://github.com/vbocan/qrng-data-diode/blob/master/docs/MCP-INTEGRATION.md)
 
 ---
 
