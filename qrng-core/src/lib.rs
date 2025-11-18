@@ -33,6 +33,7 @@ pub mod metrics;
 pub mod retry;
 
 pub use error::{Error, Result};
+pub use buffer::OverflowPolicy;
 
 /// Library version for protocol compatibility
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");

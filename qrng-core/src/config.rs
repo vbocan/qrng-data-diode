@@ -6,21 +6,16 @@ use std::time::Duration;
 use url::Url;
 
 /// Entropy mixing strategy
-#[derive(Debug, Clone, Copy, Deserialize, Serialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Deserialize, Serialize, PartialEq, Eq, Default)]
 #[serde(rename_all = "lowercase")]
 pub enum MixingStrategy {
     /// No mixing - use single source only
+    #[default]
     None,
     /// XOR all sources together
     Xor,
     /// Use HKDF (HMAC-based Key Derivation Function) for mixing
     Hkdf,
-}
-
-impl Default for MixingStrategy {
-    fn default() -> Self {
-        Self::None
-    }
 }
 
 /// Entropy Collector configuration
@@ -170,6 +165,10 @@ pub struct GatewayConfig {
     #[serde(default)]
     pub buffer_ttl_secs: u64,
     
+    /// Buffer overflow policy: "discard" or "replace"
+    #[serde(default = "default_overflow_policy")]
+    pub buffer_overflow_policy: String,
+    
     /// Valid API keys for authentication
     pub api_keys: Vec<String>,
     
@@ -245,6 +244,13 @@ impl GatewayConfig {
             None
         }
     }
+
+    pub fn overflow_policy(&self) -> crate::OverflowPolicy {
+        match self.buffer_overflow_policy.to_lowercase().as_str() {
+            "replace" => crate::OverflowPolicy::Replace,
+            _ => crate::OverflowPolicy::Discard,
+        }
+    }
 }
 
 // Default value functions
@@ -286,6 +292,10 @@ fn default_rate_limit() -> u32 {
 
 fn default_true() -> bool {
     true
+}
+
+fn default_overflow_policy() -> String {
+    "discard".to_string()
 }
 
 #[cfg(test)]
@@ -337,6 +347,7 @@ mod tests {
             listen_address: "0.0.0.0:8080".to_string(),
             buffer_size: 10240,
             buffer_ttl_secs: 3600,
+            buffer_overflow_policy: "discard".to_string(),
             api_keys: vec!["key1".to_string()],
             rate_limit_per_second: 100,
             hmac_secret_key: Some("secret".to_string()),

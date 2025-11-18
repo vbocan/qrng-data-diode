@@ -76,6 +76,7 @@ cargo test -p qrng-mcp
 - **Software Data Diode**: Unidirectional entropy flow without expensive hardware ($5K-$50K saved)
 - **Ultra-Low Latency**: Sub-4ms median, sub-10ms P99 (100x faster than public QRNG services)
 - **High Reliability**: 100% success rate when properly configured
+- **Configurable Buffer Policy**: Discard or replace mode for handling buffer overflow scenarios
 - **AI Integration**: MCP server for quantum randomness - works with Claude Desktop and compatible agents
 - **Multi-Source Aggregation**: Combine multiple QRNG appliances with XOR or HKDF mixing
 - **Cryptographic Integrity**: HMAC-SHA256 authentication + CRC32 checksums
