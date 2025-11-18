@@ -1,3 +1,14 @@
+// SPDX-License-Identifier: MIT
+//
+// QRNG Data Diode
+// Copyright (c) 2025 Valer Bocan, PhD, CSSLP
+// Email: valer.bocan@upt.ro
+//
+// Department of Computer and Information Technology
+// Politehnica University of Timisoara
+//
+// https://github.com/vbocan/qrng-data-diode
+
 //! QRNG Core Library
 //!
 //! This crate provides the foundational types, traits, and utilities for the QRNG Data Diode system.
