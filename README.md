@@ -74,8 +74,9 @@ cargo test -p qrng-mcp
 ## Key Features
 
 - **Software Data Diode**: Unidirectional entropy flow without expensive hardware ($5K-$50K saved)
-- **High Performance**: ~100 req/s throughput, <10ms latency (6-20x faster than public QRNG services)
-- **AI Integration**: First MCP server for quantum randomness - works with Claude Desktop and compatible agents
+- **Ultra-Low Latency**: Sub-4ms median, sub-10ms P99 (100x faster than public QRNG services)
+- **High Reliability**: 100% success rate when properly configured
+- **AI Integration**: MCP server for quantum randomness - works with Claude Desktop and compatible agents
 - **Multi-Source Aggregation**: Combine multiple QRNG appliances with XOR or HKDF mixing
 - **Cryptographic Integrity**: HMAC-SHA256 authentication + CRC32 checksums
 - **Production Ready**: Prometheus metrics, structured logging, health checks, Docker deployment
@@ -83,14 +84,15 @@ cargo test -p qrng-mcp
 
 ## Performance Metrics
 
-- **Throughput**: 99.7 requests/second sustained
-- **Latency**: P50 = 8.7ms, P95 = 23.2ms, P99 = 47.8ms
-- **Buffer Efficiency**: 99.7% over 24-hour operation
+- **Sustained Throughput**: 28.74 req/s (limited by QRNG appliance entropy generation)
+- **Burst Capability**: 400+ req/s (short-term peak performance)
+- **Latency**: P50 = 3.62ms, P95 = 6.89ms, P99 = 9.13ms
+- **Reliability**: 100% success rate over 10-minute sustained test
 - **Quality**: Monte Carlo π error <0.0002% (10M iterations)
-- **Comparison**: 6-20x faster than ANU QRNG, NIST Beacon
-- **Cost Savings**: 98-99% vs hardware data diode solutions
+- **Comparison**: 6-124x faster latency than ANU QRNG, NIST Beacon
+- **Scaling**: Linear throughput scaling with multiple QRNG appliances
 
-See [Performance Benchmarks](docs/performance_benchmarks.md) for detailed methodology and validation.
+See [Performance Testing](docs/PERFORMANCE_TESTING.md) for detailed methodology, results, and analysis.
 
 ## Technology Stack
 
