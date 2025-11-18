@@ -3,7 +3,7 @@
 [![Rust](https://img.shields.io/badge/rust-1.75%2B-orange.svg)](https://www.rust-lang.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Docker](https://img.shields.io/badge/Docker-Supported-blue?logo=docker)](https://docker.com)
-[![Build Status](https://img.shields.io/badge/build-passing-brightgreen)](https://github.com/vbocan/qrng-data-diode)
+[![Build Status](https://github.com/vbocan/qrng-data-diode/workflows/Build%20and%20Push%20Docker%20Images/badge.svg)](https://github.com/vbocan/qrng-data-diode/actions/workflows/docker-build.yml)
 [![API](https://img.shields.io/badge/API-REST-orange)](http://localhost:7764/swagger)
 [![MCP](https://img.shields.io/badge/MCP-Protocol-purple)](https://modelcontextprotocol.io)
 
