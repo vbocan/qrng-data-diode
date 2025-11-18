@@ -1,4 +1,4 @@
-# QRNG Data Diode: Software-Based Quantum Entropy Bridge
+# QRNG Data Diode: High-Performance Quantum Entropy Bridge
 
 [![Rust](https://img.shields.io/badge/rust-1.75%2B-orange.svg)](https://www.rust-lang.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
