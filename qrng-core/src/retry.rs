@@ -1,3 +1,14 @@
+// SPDX-License-Identifier: MIT
+//
+// QRNG Data Diode
+// Copyright (c) 2025 Valer Bocan, PhD, CSSLP
+// Email: valer.bocan@upt.ro
+//
+// Department of Computer and Information Technology
+// Politehnica University of Timisoara
+//
+// https://github.com/vbocan/qrng-data-diode
+
 //! Retry logic with exponential backoff and jitter
 
 use crate::Result;
