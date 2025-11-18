@@ -11,12 +11,74 @@
 
 A high-performance, secure bridge service that exposes Quantum Random Number Generator (QRNG) entropy to external networks using software-based data diode emulation. Designed for academic research, cryptographic applications, and scientific computing with true quantum randomness.
 
-## Quick Start with Docker
+![Quantis QRNG Appliance](docs/images/quantis-appliance.png)
+
+_IDQuantique Quantis QRNG Appliance - Hardware quantum entropy source_
+
+## Quick Start - Try the Live Service
+
+### Live QRNG Gateway
+
+Get quantum random data instantly from our live gateway at **https://qrng.dataman.ro**:
+
+```bash
+# Get 32 bytes of quantum random data (hex encoded)
+curl "https://qrng.dataman.ro/api/random?bytes=32&api_key=test-key-1234567890"
+
+# Get 16 bytes in base64 format
+curl "https://qrng.dataman.ro/api/random?bytes=16&encoding=base64&api_key=test-key-1234567890"
+
+# Get 16 random integers between 0-100
+curl "https://qrng.dataman.ro/api/integers?count=16&min=0&max=100&api_key=test-key-1234567890"
+
+# Get random floats between 0 and 1
+curl "https://qrng.dataman.ro/api/floats?count=10&api_key=test-key-1234567890"
+
+# Check service health (returns HTTP 200 if healthy)
+curl "https://qrng.dataman.ro/health"
+
+# Get detailed service status (query parameter)
+curl "https://qrng.dataman.ro/api/status?api_key=test-key-1234567890"
+
+# Or use Authorization header (all authenticated endpoints support both methods)
+curl -H "Authorization: Bearer test-key-1234567890" "https://qrng.dataman.ro/api/status"
+```
+
+**Note**: The demo API key `test-key-1234567890` is for testing purposes. For production use, deploy your own instance.
+
+### MCP Integration with Claude Desktop
+
+Add quantum randomness to Claude Desktop (requires Claude Pro):
+
+1. Open Claude Desktop
+2. Go to **Settings** → **Connectors**
+3. Click **Add Connector**
+4. Enter the MCP server URL: `https://qrng-mcp.datamana.ro`
+5. Save and the QRNG tools will be available in your conversations
+
+### LM Studio MCP Integration
+
+Configure LM Studio to use the QRNG MCP server:
+
+1. Open LM Studio
+2. Go to **Integrations** dialog
+3. Add the MCP server URL: `https://qrng-mcp.datamana.ro`
+4. The QRNG tools will be available to your LLM
+
+Supported MCP tools:
+
+- `get_random_bytes`: Get raw quantum random bytes
+- `get_random_integers`: Generate random integers in range
+- `get_random_hex`: Get hex-encoded random data
+- `get_random_base64`: Get base64-encoded random data
+
+## Quick Start with Docker (Self-Hosted)
 
 ### Prerequisites
 
+> **⚠️ CRITICAL REQUIREMENT**: You must have access to a **Quantis QRNG hardware appliance** or API-compatible quantum entropy source. This software acts as a bridge and cannot generate quantum randomness by itself.
+
 - Docker and Docker Compose
-- Access to a Quantis QRNG appliance (or API-compatible endpoint)
 - OpenSSL (for key generation)
 
 ### Generate HMAC Secret Key
@@ -54,10 +116,21 @@ That's it! The system will start collecting quantum entropy and serving it via A
 
 ### Access the Services
 
-- **Gateway API**: http://localhost:7764/api/bytes?length=32
-- **API Documentation**: http://localhost:7764/swagger
-- **Prometheus Metrics**: http://localhost:7764/metrics
+Once running, the gateway provides the following endpoints:
+
+**API Endpoints** (all require `api_key` parameter or `Authorization: Bearer <key>` header):
+
+- **Random Bytes**: http://localhost:7764/api/random?bytes=32&api_key=YOUR_API_KEY
+- **Random Integers**: http://localhost:7764/api/integers?count=10&min=0&max=100&api_key=YOUR_API_KEY
+- **Random Floats**: http://localhost:7764/api/floats?count=10&api_key=YOUR_API_KEY
+- **UUID Generation**: http://localhost:7764/api/uuid?count=5&api_key=YOUR_API_KEY
+- **System Status**: http://localhost:7764/api/status?api_key=YOUR_API_KEY
+- **Monte Carlo Test**: http://localhost:7764/api/test/monte-carlo?iterations=1000000&api_key=YOUR_API_KEY (POST)
+
+**Monitoring Endpoints** (no authentication required):
+
 - **Health Check**: http://localhost:7764/health
+- **Prometheus Metrics**: http://localhost:7764/metrics
 
 ### Running Tests
 
@@ -122,18 +195,6 @@ If you use QRNG-DD in your research, please cite:
 
 See [CITATION.cff](CITATION.cff) for structured citation metadata.
 
-## Contributing
-
-We welcome contributions from the community:
-
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
-
-For major changes, please open an issue first to discuss proposed modifications. See [CONTRIBUTING.md](CONTRIBUTING.md) for detailed guidelines.
-
 ## License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
@@ -142,6 +203,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 - **User Guide**: [docs/USAGE_GUIDE.md](docs/USAGE_GUIDE.md)
 - **Architecture**: Detailed technical architecture in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
+<<<<<<< Updated upstream
 - **Docker Deployment**: [docs/DOCKER_DEPLOYMENT.md](docs/DOCKER_DEPLOYMENT.md)
 - **MCP Integration**: [docs/mcp_integration.md](docs/mcp_integration.md)
 
@@ -151,15 +213,16 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - **Performance Benchmarks**: [docs/performance_benchmarks.md](docs/performance_benchmarks.md)
 - **Security Analysis**: [docs/security_analysis.md](docs/security_analysis.md)
 - **Comparison Tables**: [docs/comparison_table.md](docs/comparison_table.md)
+=======
+- **MCP Integration**: AI agent integration guide in [docs/MCP-INTEGRATION.md](docs/MCP-INTEGRATION.md)
+- **Security Analysis**: Comprehensive security architecture in [docs/SECURITY-ANALYSIS.md](docs/SECURITY-ANALYSIS.md)
+- **Performance Benchmarks**: Detailed performance testing and analysis in [docs/BENCHMARK.md](docs/BENCHMARK.md)
+>>>>>>> Stashed changes
 
 ## Support & Contact
 
+- **Author**: Valer Bocan, PhD, CSSLP
+- **Email:**: valer.bocan@upt.ro
+- **Affiliation**: Department of Computer and Information Technology, Politehnica University of Timișoara, ROMANIA
 - **Issues**: Report bugs and request features via [GitHub Issues](https://github.com/vbocan/qrng-data-diode/issues)
 - **Discussions**: Community support via [GitHub Discussions](https://github.com/vbocan/qrng-data-diode/discussions)
-- **Email**: valer.bocan@upt.ro
-
----
-
-**Version**: 1.0.0  
-**Status**: Active Development  
-**Repository**: https://github.com/vbocan/qrng-data-diode
