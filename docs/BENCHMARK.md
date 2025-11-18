@@ -1,4 +1,4 @@
-# QRNG-DD Performance Testing Results
+# QRNG-DD Benchmark
 
 ## Executive Summary
 

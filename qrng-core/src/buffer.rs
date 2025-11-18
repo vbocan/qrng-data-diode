@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 //
-// QRNG Data Diode
+// QRNG Data Diode: High-Performance Quantum Entropy Bridge
 // Copyright (c) 2025 Valer Bocan, PhD, CSSLP
 // Email: valer.bocan@upt.ro
 //
