@@ -152,7 +152,7 @@ QRNG-DD demonstrates practical quantum entropy distribution through software-bas
 
 ## Acknowledgments
 
-This research received no specific grant from any funding agency.
+The author gratefully acknowledges Politehnica University of Timisoara for providing access to the Quantis appliance used in the development and testing of this system.
 
 ---
 
@@ -203,7 +203,6 @@ This research received no specific grant from any funding agency.
 
 ## Software Availability
 
-- **Archive**: Zenodo (DOI to be assigned upon publication)
 - **Repository**: https://github.com/vbocan/qrng-data-diode
 - **Documentation**: https://github.com/vbocan/qrng-data-diode/tree/master/docs
 - **Supplementary Materials**:
