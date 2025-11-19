@@ -1,101 +1,401 @@
 # QRNG Data Diode: System Architecture
 
-**A comprehensive technical narrative of design choices, implementation strategies, and engineering trade-offs**
+**Technical overview of the software-based data diode architecture for quantum entropy distribution**
 
 ## Table of Contents
 
-1. [Introduction](#introduction)
-2. [Core Technology Choices](#core-technology-choices)
-3. [Security Architecture](#security-architecture)
-4. [Data Flow and Protocol Design](#data-flow-and-protocol-design)
-5. [Performance Engineering](#performance-engineering)
-6. [Observability and Operations](#observability-and-operations)
-7. [Deployment and Licensing](#deployment-and-licensing)
+1. [Overview](#overview)
+2. [System Components](#system-components)
+3. [Data Flow](#data-flow)
+4. [Security Model](#security-model)
+5. [API Design](#api-design)
+6. [Deployment](#deployment)
 
 ---
 
-## Introduction
+## Overview
 
-QRNG Data Diode represents a convergence of quantum physics, network security, and systems programming. The architecture emerged from a fundamental challenge: how to safely bridge quantum random number generators operating on isolated internal networks to external applications and AI agents, while maintaining stringent security guarantees without the $5,000-$50,000 cost of hardware data diodes.
+QRNG Data Diode bridges quantum random number generators on isolated internal networks to external applications while maintaining strong security guarantees. The architecture achieves this through a software-based data diode that emulates hardware data diode properties at near-zero cost.
 
-This document tells the story of how we built a production-grade system that achieves sub-4ms median latency, maintains cryptographic integrity through multiple verification layers, and provides zero-configuration integration for AI agents through the Model Context Protocol—all while leveraging Rust's compile-time guarantees to eliminate entire classes of security vulnerabilities.
-
----
-
-## Core Technology Choices
-
-### Why Rust?
-
-The decision to implement QRNG-DD in Rust wasn't merely about following industry trends—it was a deliberate engineering choice driven by the system's security-critical nature and performance requirements.
-
-**Memory Safety Without Garbage Collection**
-
-Traditional systems languages like C and C++ offer the performance necessary for high-throughput network services but leave developers vulnerable to buffer overflows, use-after-free bugs, and data races. Higher-level languages like Java or Go provide safety through garbage collection but introduce unpredictable latency spikes that are unacceptable for a real-time entropy distribution system.
-
-Rust's ownership system provides compile-time memory safety guarantees without runtime overhead. The borrow checker ensures that no null pointer dereferences, no data races, and no memory leaks can occur in safe code. For a system handling cryptographic material and operating across network security boundaries, these guarantees aren't luxuries—they're requirements.
-
-**Zero-Cost Abstractions**
-
-Rust's promise of "zero-cost abstractions" means we can write high-level, expressive code that compiles down to machine code comparable to hand-optimized C. Our entropy buffer implementation uses smart pointers (`Arc<RwLock<T>>`) for thread-safe shared access, yet benchmarks show performance within 5% of raw C implementations. The abstraction cost is quite literally zero.
-
-**Fearless Concurrency**
-
-The Gateway component must handle hundreds of concurrent API requests while the Collector simultaneously fetches from QRNG appliances and pushes signed packets. Rust's type system makes data races impossible—if code compiles, it's thread-safe. This guarantee eliminated weeks of debugging subtle concurrency bugs that would plague implementations in other languages.
-
-**Ecosystem Maturity**
-
-By 2025, Rust's ecosystem for network services has matured significantly. Tokio provides production-grade async I/O, Axum delivers type-safe HTTP routing, and the cryptography libraries undergo rigorous security audits. We didn't need to reinvent wheels—we composed battle-tested components into a novel architecture.
-
-**The Trade-offs**
-
-We accepted longer compilation times (typically 20-30 seconds for full builds) and a steeper learning curve for contributors. The Rust talent pool remains smaller than Java or Python. But these operational costs pale compared to the security vulnerabilities we prevented and the debugging hours we saved.
+**Key Properties:**
+- **Unidirectional data flow**: Push-only architecture prevents reverse communication
+- **Sub-4ms latency**: High-performance Rust implementation with async I/O
+- **Cryptographic integrity**: Multi-layer verification with HMAC-SHA256
+- **Zero-configuration AI integration**: Model Context Protocol (MCP) support
 
 ---
 
-## Security Architecture
+## System Components
 
-### The Software Data Diode Concept
+The system consists of two independent services:
 
-Hardware data diodes achieve unidirectional information flow through physical constraints—typically fiber-optic transmission with the receiver component removed, making reverse communication physically impossible. QRNG-DD emulates this property through architectural constraints enforced by both software design and network configuration.
+### Entropy Collector (Internal Network)
 
-**Split Architecture: Collector and Gateway**
+**Purpose**: Fetch quantum entropy from QRNG appliances and push to gateway
 
-The system comprises two independent binaries operating on different network segments:
+**Responsibilities:**
+- Connects to Quantis QRNG appliances via HTTPS
+- Fetches random data at configured intervals
+- Signs packets with HMAC-SHA256
+- Pushes signed packets to Gateway
+- **Critical**: Has no listening sockets - cannot receive inbound connections
 
-1. **Entropy Collector** (Internal Network)
-   - Accesses QRNG appliance via HTTPS
-   - Fetches quantum entropy at configured intervals
-   - Signs packets with HMAC-SHA256
-   - Pushes to Gateway endpoint
-   - **Critical constraint**: Has no listening sockets, cannot receive inbound connections
-
-2. **Entropy Gateway** (External Network)
-   - Receives pushed entropy packets
-   - Verifies cryptographic signatures
-   - Serves REST API to external clients
-   - **Critical constraint**: Cannot initiate connections to Collector
-
-This separation creates a "push-only" data flow. The Gateway has no mechanism to request data from the Collector, preventing attackers who compromise the Gateway from probing the internal network or extracting sensitive information from the QRNG appliance.
-
-**Firewall Enforcement**
-
-Network-level rules complement the software architecture:
-
-```
-Internal Network (Collector):
-- ALLOW: Outbound HTTPS to Gateway (port 7764)
-- ALLOW: Outbound HTTPS to QRNG appliance (port 443)
-- DENY: All inbound connections
-
-External Network (Gateway):
-- ALLOW: Inbound HTTPS from Collector (specific IP)
-- ALLOW: Inbound HTTPS from API clients
-- DENY: All outbound to RFC 1918 addresses (10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16)
+**Configuration:**
+```env
+QRNG_APPLIANCE_URLS=https://qrng-1.internal:443,https://qrng-2.internal:443
+QRNG_HMAC_SECRET_KEY=<64-char-hex-key>
+QRNG_GATEWAY_PUSH_URL=https://gateway.external:7764/push
 ```
 
-This configuration makes reverse communication not just difficult, but functionally impossible without physical access to reconfigure firewalls—a security property approaching hardware data diodes at near-zero cost.
+### Entropy Gateway (External Network)
 
-### Defense in Depth: Four-Layer Integrity Verification
+**Purpose**: Receive entropy and serve external API clients
+
+**Responsibilities:**
+- Receives pushed entropy packets
+- Verifies cryptographic signatures
+- Maintains entropy buffer (default: 10MB)
+- Serves REST API to clients
+- Provides MCP server for AI agents
+- **Critical**: Cannot initiate connections to Collector
+
+**Configuration:**
+```env
+QRNG_BUFFER_SIZE=10485760
+QRNG_BUFFER_OVERFLOW_POLICY=discard
+QRNG_API_KEYS=key1,key2,key3
+```
+
+---
+
+## Data Flow
+
+### 1. Entropy Collection
+
+```
+QRNG Appliance → Collector (fetch) → Sign Packet → Push to Gateway
+```
+
+The Collector periodically fetches entropy from one or more QRNG appliances:
+- Default fetch size: 4KB per request
+- Configurable fetch interval: 100ms-10s
+- Multiple appliances: Data combined using XOR or HKDF
+
+### 2. Packet Format
+
+Each entropy packet contains:
+
+| Field | Size | Description |
+|-------|------|-------------|
+| Timestamp | 8 bytes | UTC timestamp (µs precision) |
+| Entropy | Variable | Raw quantum random bytes |
+| CRC32 | 4 bytes | Data integrity checksum |
+| HMAC | 32 bytes | SHA256 authentication tag |
+
+### 3. Gateway Processing
+
+```
+Receive Packet → Verify HMAC → Verify CRC32 → Buffer → Serve API
+```
+
+**Buffer Management:**
+- Circular buffer (default: 10MB)
+- Overflow policies: `discard` (drop new data) or `replace` (overwrite oldest)
+- Thread-safe concurrent access
+- Metrics: fill percentage, bytes available, data age
+
+### 4. API Distribution
+
+External clients request entropy via REST API:
+
+```bash
+# Get random bytes
+GET /api/random?bytes=32&encoding=hex
+
+# Get random integers
+GET /api/integers?count=10&min=0&max=100
+
+# Get UUIDs
+GET /api/uuid?count=5
+```
+
+---
+
+## Security Model
+
+### Software Data Diode Properties
+
+**Unidirectional Flow**: Achieved through architectural constraints:
+
+1. **Collector**: No listening sockets → cannot receive connections
+2. **Gateway**: No reverse connection capability → cannot probe internal network
+3. **Network rules**: Firewall blocks inbound to Collector, outbound from Gateway to internal IPs
+
+This creates a "push-only" data flow where compromising the Gateway provides no path to attack the internal network.
+
+### Multi-Layer Verification
+
+**Layer 1: Network Authentication**
+- TLS 1.3 for encrypted transport
+- Client certificate validation (optional)
+
+**Layer 2: Application Signature**
+- HMAC-SHA256 with shared secret key
+- Prevents packet forgery and replay attacks
+
+**Layer 3: Data Integrity**
+- CRC32 checksum on entropy payload
+- Detects transmission errors
+
+**Layer 4: Timestamp Validation**
+- Rejects packets >60s old
+- Prevents replay attacks
+
+### Firewall Configuration
+
+**Internal Network (Collector):**
+```
+ALLOW: Outbound HTTPS to Gateway (specific IP:7764)
+ALLOW: Outbound HTTPS to QRNG appliance (port 443)
+DENY:  All inbound connections
+```
+
+**External Network (Gateway):**
+```
+ALLOW: Inbound HTTPS from Collector (specific IP)
+ALLOW: Inbound HTTPS from API clients
+DENY:  All outbound to RFC 1918 addresses (10/8, 172.16/12, 192.168/16)
+```
+
+---
+
+## API Design
+
+### REST API Endpoints
+
+**Entropy Distribution:**
+- `GET /api/random` - Raw random bytes (hex/base64/binary)
+- `GET /api/integers` - Random integers in range
+- `GET /api/floats` - Random floats [0, 1)
+- `GET /api/uuid` - UUIDv4 generation
+
+**Monitoring:**
+- `GET /health` - Simple health check (no auth)
+- `GET /api/status` - Detailed system status (auth required)
+- `GET /metrics` - Prometheus metrics (no auth)
+
+**Testing:**
+- `POST /api/test/monte-carlo` - Randomness quality validation
+
+### Authentication
+
+Two methods supported (both work for all authenticated endpoints):
+
+**1. Query Parameter:**
+```bash
+curl "https://gateway/api/random?bytes=32&api_key=YOUR_KEY"
+```
+
+**2. Authorization Header:**
+```bash
+curl -H "Authorization: Bearer YOUR_KEY" "https://gateway/api/random?bytes=32"
+```
+
+### Rate Limiting
+
+Token bucket algorithm per API key:
+- Default: 100 requests/second per key
+- Configurable per deployment
+- Returns `HTTP 429` when exceeded
+
+### Model Context Protocol (MCP)
+
+Built-in MCP server provides quantum randomness to AI agents.
+
+**Tools Available:**
+- `get_random_bytes` - Fetch random bytes
+- `get_random_integers` - Generate random integers
+- `get_random_hex` - Get hex-encoded data
+- `get_random_base64` - Get base64-encoded data
+
+**Using the Public MCP Server:**
+
+The public MCP server at `https://qrng-mcp.datamana.ro` requires no authentication from clients (the MCP server handles Gateway authentication internally).
+
+**Claude Desktop** - Add to Settings → Connectors:
+```
+Server URL: https://qrng-mcp.datamana.ro
+```
+
+**LM Studio** - Add in Integrations:
+```
+MCP Server URL: https://qrng-mcp.datamana.ro
+```
+
+**Self-Hosted MCP Server:**
+
+For self-hosted deployments, run the MCP server with Docker:
+
+```bash
+docker run -d \
+  -p 8080:8080 \
+  -e QRNG_GATEWAY_URL=http://your-gateway:7764 \
+  -e QRNG_GATEWAY_API_KEY=your-api-key \
+  ghcr.io/vbocan/qrng-mcp:latest
+```
+
+Then configure Claude/LM Studio to connect to `http://localhost:8080`.
+
+---
+
+## Deployment
+
+### Docker Compose (Recommended)
+
+**docker-compose.yml:**
+```yaml
+version: '3.8'
+
+services:
+  qrng-collector:
+    image: ghcr.io/vbocan/qrng-collector:latest
+    environment:
+      - QRNG_APPLIANCE_URLS=https://qrng.internal:443
+      - QRNG_HMAC_SECRET_KEY=${HMAC_KEY}
+      - QRNG_GATEWAY_PUSH_URL=https://gateway:7764/push
+    restart: unless-stopped
+
+  qrng-gateway:
+    image: ghcr.io/vbocan/qrng-gateway:latest
+    environment:
+      - QRNG_BUFFER_SIZE=10485760
+      - QRNG_HMAC_SECRET_KEY=${HMAC_KEY}
+      - QRNG_API_KEYS=${API_KEYS}
+    ports:
+      - "7764:7764"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:7764/health"]
+      interval: 30s
+    restart: unless-stopped
+```
+
+**Start services:**
+```bash
+# Generate shared secret
+export HMAC_KEY=$(openssl rand -hex 32)
+export API_KEYS=production-key-1,production-key-2
+
+docker-compose up -d
+```
+
+### Configuration
+
+**Environment Variables:**
+
+| Variable | Component | Default | Description |
+|----------|-----------|---------|-------------|
+| `QRNG_APPLIANCE_URLS` | Collector | - | Comma-separated QRNG endpoints |
+| `QRNG_HMAC_SECRET_KEY` | Both | - | Shared authentication secret |
+| `QRNG_GATEWAY_PUSH_URL` | Collector | - | Gateway push endpoint |
+| `QRNG_BUFFER_SIZE` | Gateway | 10485760 | Buffer size in bytes (10MB) |
+| `QRNG_BUFFER_OVERFLOW_POLICY` | Gateway | discard | `discard` or `replace` |
+| `QRNG_API_KEYS` | Gateway | - | Comma-separated API keys |
+| `QRNG_RATE_LIMIT` | Gateway | 100 | Requests/second per key |
+
+### Monitoring
+
+**Prometheus Metrics:**
+```
+# Buffer status
+qrng_buffer_fill_percent
+qrng_buffer_bytes_available
+
+# Request metrics
+qrng_requests_total
+qrng_bytes_served_total
+qrng_request_latency_seconds
+
+# System health
+qrng_uptime_seconds
+qrng_collector_fetch_errors_total
+```
+
+**Grafana Dashboard:**
+- Buffer fill percentage over time
+- Request throughput (req/s)
+- Latency distribution (P50/P95/P99)
+- Error rates
+
+**Alerting Rules:**
+```yaml
+- alert: BufferCriticallyLow
+  expr: qrng_buffer_fill_percent < 10
+  for: 5m
+
+- alert: HighErrorRate
+  expr: rate(qrng_collector_fetch_errors_total[5m]) > 0.1
+  for: 2m
+```
+
+### Scaling
+
+**Horizontal Scaling:**
+- Multiple Gateway instances behind load balancer
+- Each Gateway has independent buffer
+- Collector pushes to all Gateways (broadcast mode)
+
+**Vertical Scaling:**
+- Increase buffer size for higher burst capacity
+- More QRNG appliances → higher sustained throughput
+- Buffer size vs. memory: 10MB ≈ 10MB RAM
+
+---
+
+## Performance Characteristics
+
+**Latency:**
+- P50: 3.62ms
+- P95: 6.89ms  
+- P99: 9.13ms
+
+**Throughput:**
+- Sustained: ~29 req/s (limited by QRNG hardware)
+- Burst: 400+ req/s (from buffer)
+
+**Scalability:**
+- Linear scaling with multiple QRNG appliances
+- Buffer provides burst absorption
+
+**Comparison to Alternatives:**
+- 6-124x faster than public QRNG services (ANU, NIST Beacon)
+- $5K-$50K cheaper than hardware data diodes
+- Sub-10ms vs. 200-500ms for cloud services
+
+---
+
+## Technology Stack
+
+**Implementation:**
+- Language: Rust 1.75+
+- Async Runtime: Tokio
+- HTTP Server: Axum
+- Cryptography: RustCrypto
+
+**Deployment:**
+- Containers: Docker
+- Orchestration: Docker Compose / Kubernetes
+- Monitoring: Prometheus + Grafana
+
+**License:** MIT - Free for academic and commercial use
+
+---
+
+## See Also
+
+- [Security Analysis](SECURITY-ANALYSIS.md) - Detailed threat model and mitigations
+- [Performance Benchmarks](BENCHMARK.md) - Comprehensive performance testing
+- [MCP Integration Guide](MCP-INTEGRATION.md) - AI agent integration
+- [Main README](../README.md) - Quick start and examples
 
 A single security mechanism, no matter how strong, represents a single point of failure. QRNG-DD implements four independent integrity checks that must all pass for packet acceptance.
 
@@ -558,7 +858,7 @@ Graceful degradation philosophy: warn early, fail gracefully, never silent failu
 
 ---
 
-## Deployment and Licensing
+## Deployment
 
 ### Docker Containerization
 
@@ -578,12 +878,6 @@ services:
       test: ["CMD", "curl", "-f", "http://localhost:7764/health"]
       interval: 30s
 ```
-
-Containers provide:
-- **Reproducibility**: Identical environment across dev/staging/prod
-- **Isolation**: Dependencies bundled, no host conflicts
-- **Scalability**: Horizontal scaling with orchestrators
-- **Rollback**: Tag-based versioning enables instant rollback
 
 The Rust release builds produce static binaries with minimal dependencies, creating tiny Docker images (~50MB) that start in milliseconds.
 
@@ -606,17 +900,5 @@ EOF
 ```
 
 This separation keeps secrets out of version control while allowing complex configuration to be declarative and versioned.
-
-### MIT License: Maximizing Impact
-
-The project uses the MIT License, chosen for:
-
-**Academic Compatibility**: Research institutions freely use and extend the code without legal concerns. Citation requirements come from academic norms, not license restrictions.
-
-**Commercial Friendliness**: Companies can deploy in production, modify for internal use, or integrate into proprietary products. This encourages adoption and real-world testing, improving the software through diverse use cases.
-
-**Simplicity**: The entire license fits on one page and is universally understood. No patent clauses, no advertising requirements, no copyleft restrictions.
-
-**Trade-off**: Code can be incorporated into closed-source projects without contribution back. We accept this because maximizing adoption and impact outweighs control over derivative works.
 
 ---
