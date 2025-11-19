@@ -2,17 +2,17 @@
 
 **Valer Bocan, PhD, CSSLP**
 
-*Department of Computer and Information Technology, Politehnica University of Timisoara, Timisoara, 300223, Romania*
+_Department of Computer and Information Technology, Politehnica University of Timisoara, Timisoara, 300223, Romania_
 
-*Email: valer.bocan@upt.ro*
+_Email: valer.bocan@upt.ro_
 
-*ORCID: 0009-0006-9084-4064*
+_ORCID: 0009-0006-9084-4064_
 
 ---
 
 ## Abstract
 
-QRNG-DD is an open-source system for secure quantum random number distribution across network boundaries using software-based data diode emulation, addressing the challenge of accessing quantum entropy from network-isolated QRNG appliances while maintaining strict unidirectional data flow essential for security-sensitive deployments. Implemented in Rust to leverage memory safety guarantees and high-performance concurrency primitives, the system employs lock-free buffers, zero-copy operations, and asynchronous input/output processing achieving sub-4-millisecond median latency and sub-10-millisecond 99th percentile latency with sustained throughput of approximately 29 requests per second when connected to a single QRNG appliance. The split architecture comprising an Entropy Collector and Entropy Gateway enforces unidirectional flow without expensive hardware data diodes, instead employing cryptographic integrity mechanisms including HMAC-SHA256 authentication, CRC32 checksums, and timestamp-based freshness validation to provide cost-effective security appropriate for academic research and moderate-security production environments. Distinguished by its integration with the Model Context Protocol, QRNG-DD enables AI agents to seamlessly access quantum randomness for cryptographic operations and simulations through standardized interfaces eliminating custom integration requirements. The system incorporates built-in statistical validation through Monte Carlo π estimation achieving sub-0.0002% error rates, supports multi-source entropy aggregation mitigating vendor dependence and single-point-of-failure risks, and provides comprehensive observability through Prometheus metrics and structured logging suitable for production deployment in research infrastructure.
+QRNG-DD is an open-source system for secure quantum random number distribution across network boundaries using software-based data diode emulation, addressing the challenge of accessing quantum entropy from network-isolated QRNG appliances while maintaining strict unidirectional data flow essential for security-sensitive deployments. Implemented in Rust to leverage memory safety guarantees and high-performance concurrency primitives, the system employs lock-free buffers, zero-copy operations, and asynchronous input/output processing achieving low latency with sustained throughput when connected to a single QRNG appliance. The split architecture comprising an Entropy Collector and Entropy Gateway enforces unidirectional flow without expensive hardware data diodes, instead employing cryptographic integrity mechanisms including HMAC-SHA256 authentication, CRC32 checksums, and timestamp-based freshness validation to provide cost-effective security appropriate for academic research and moderate-security production environments. Distinguished by its integration with the Model Context Protocol, QRNG-DD enables AI agents to seamlessly access quantum randomness for cryptographic operations and simulations through standardized interfaces eliminating custom integration requirements. The system incorporates built-in statistical validation through Monte Carlo π estimation achieving sub-0.0002% error rates, supports multi-source entropy aggregation mitigating vendor dependence and single-point-of-failure risks, and provides comprehensive observability through Prometheus metrics and structured logging suitable for production deployment in research infrastructure.
 
 **Keywords:** quantum random number generator, QRNG, data diode, entropy distribution, Rust, Model Context Protocol, MCP, AI agents, cryptography, network security, high-performance computing
 
@@ -50,9 +50,9 @@ Quantum computing research benefits from AI-assisted workflows where agents acce
 
 Hardware data diodes from vendors like Owl Cyber Defense provide physical unidirectional guarantees through fiber-optic transmission with removed receive capability [3], offering maximum security for critical infrastructure but requiring five to fifty thousand dollar investments and inflexible deployment. QRNG-DD trades physical guarantees for practical software isolation while maintaining adequate security for research and moderate-security deployments at significantly reduced cost.
 
-Public QRNG services from ANU, NIST, and Ruđer Bošković Institute democratize quantum randomness access but impose limitations unsuitable for research-grade applications [4][5][9]: ANU limits requests to five per second with 1024-byte maximums and 450ms latency, while NIST provides only one pulse per minute. These services require Internet connectivity, raising privacy concerns through centralized request logging. QRNG-DD's self-hosted architecture eliminates rate limits, supports megabyte requests, achieves single-digit millisecond latencies, and ensures complete privacy.
+Public QRNG services from ANU and NIST democratize quantum randomness access but impose limitations unsuitable for research-grade applications [4][5]: ANU limits requests to five per second with 1024-byte maximums and 450ms latency, while NIST provides only one pulse per minute. These services require Internet connectivity, raising privacy concerns through centralized request logging. QRNG-DD's self-hosted architecture eliminates rate limits, supports megabyte requests, achieves single-digit millisecond latencies, and ensures complete privacy.
 
-Commercial QRNG appliances like ID Quantique's Quantis provide quantum hardware with basic APIs but lack data isolation, AI integration, multi-source mixing, and quality validation [2]. Organizations with existing appliances can add QRNG-DD at zero hardware cost, gaining sophisticated distribution capabilities. The Model Context Protocol from Anthropic establishes AI tool integration standards [7], enabling researchers to access quantum randomness in AI-assisted workflows. Academic literature on software data diodes remains limited, with most work focusing on hardware or theoretical models [10], leaving QRNG-DD as an open-source system combining software data diode emulation, quantum entropy distribution, AI integration, and production-grade performance.
+Commercial QRNG appliances like ID Quantique's Quantis provide quantum hardware with basic APIs but lack data isolation, AI integration, multi-source mixing, and quality validation [2]. Organizations with existing appliances can add QRNG-DD at zero hardware cost, gaining sophisticated distribution capabilities. The Model Context Protocol from Anthropic establishes AI tool integration standards [7], enabling researchers to access quantum randomness in AI-assisted workflows. Academic literature on software data diodes remains limited, with most work focusing on hardware or theoretical models [9], leaving QRNG-DD as an open-source system combining software data diode emulation, quantum entropy distribution, AI integration, and production-grade performance.
 
 ---
 
@@ -86,7 +86,7 @@ Each tool returns structured JSON with source attribution identifying randomness
 
 QRNG-DD combines entropy from multiple QRNG appliances to mitigate single-source risks including hardware failures, potential backdoors, and vendor-specific biases, supporting two mixing strategies selected based on source correlation assumptions. For genuinely independent quantum sources operating on isolated phenomena, exclusive-or combination provides information-theoretic security guarantees wherein if at least one source generates uniformly distributed random bits independent of others, the XOR output necessarily produces uniform distribution inheriting the strongest source's security [8].
 
-For potentially correlated sources from shared environmental factors or when combining quantum with high-quality pseudo-random sources, HMAC-based Key Derivation Function provides superior statistical properties through cryptographic extraction transforming concatenated multi-source input into uniformly distributed output maintaining cryptographic quality even with complex correlation patterns [11].
+For potentially correlated sources from shared environmental factors or when combining quantum with high-quality pseudo-random sources, HMAC-based Key Derivation Function provides superior statistical properties through cryptographic extraction transforming concatenated multi-source input into uniformly distributed output maintaining cryptographic quality even with complex correlation patterns [10].
 
 The Collector continuously monitors source health through independent tracking of success rates, failure patterns, and latencies, implementing automatic fault isolation where sources exceeding configurable failure thresholds (default: three consecutive failures) become temporarily excluded while remaining under active monitoring. Automatic recovery retries failed sources at sixty-second intervals, ensuring dynamic adaptation to transient issues without manual intervention.
 
@@ -176,13 +176,13 @@ This research received no specific grant from any funding agency.
 
 [1] M. Herrero-Collantes and J. C. Garcia-Escartin, "Quantum random number generators," Reviews of Modern Physics, vol. 89, no. 1, article 015004, 2017. doi: 10.1103/RevModPhys.89.015004
 
-[2] ID Quantique, "Quantis QRNG Appliance," 2024. [Online]. Available: https://www.idquantique.com/random-number-generation/products/quantis-qrng-appliance/. [Accessed: 03-Oct-2025].
+[2] ID Quantique, "Quantis QRNG Appliance," 2024. [Online]. Available: https://www.idquantique.com/random-number-generation/products/quantis-rng-appliance/. [Accessed: 03-Oct-2025].
 
-[3] Owl Cyber Defense, "Data Diode Technology," 2024. [Online]. Available: https://owlcyberdefense.com/data-diodes/. [Accessed: 21-Oct-2025].
+[3] Owl Cyber Defense, "Data Diode Technology," 2024. [Online]. Available: https://owlcyberdefense.com/resource/data-diode-security-solutions/. [Accessed: 21-Oct-2025].
 
 [4] Australian National University, "ANU QRNG API," 2024. [Online]. Available: https://qrng.anu.edu.au/. [Accessed: 28-Oct-2025].
 
-[5] National Institute of Standards and Technology, "NIST Randomness Beacon," 2024. [Online]. Available: https://beacon.nist.gov/. [Accessed: 12-Nov-2025].
+[5] National Institute of Standards and Technology, "NIST Randomness Beacon," 2024. [Online]. Available: https://beacon.nist.gov/. [Accessed: 28-Oct-2025].
 
 [6] R. Jung, J.-H. Jourdan, R. Krebbers, and D. Dreyer, "RustBelt: Securing the Foundations of the Rust Programming Language," Proceedings of the ACM on Programming Languages, vol. 2, no. POPL, article 66, pp. 1-34, 2018. doi: 10.1145/3158154
 
@@ -190,32 +190,30 @@ This research received no specific grant from any funding agency.
 
 [8] C. H. Bennett, G. Brassard, and J.-M. Robert, "Privacy amplification by public discussion," SIAM Journal on Computing, vol. 17, no. 2, pp. 210-229, 1988. doi: 10.1137/0217014
 
-[9] Ruđer Bošković Institute, "QRNG Service," 2024. [Online]. Available: https://qrng.irb.hr/. [Accessed: 18-Oct-2025].
+[9] A. Ginter and J. Tschersich, "Unidirectional Gateways and Industrial Network Security," in Proc. 14th Int. Conf. Accelerator and Large Experimental Physics Control Systems (ICALEPCS'13), San Francisco, CA, USA, Oct. 2013, paper THCOBA02.  [Online]Available: https://proceedings.jacow.org/ICALEPCS2013/papers/thcoba02.pdf [Accessed: 19-Nov-2025]
 
-[10] A. Ginter and J. Tschersich, "Unidirectional Gateways and Industrial Network Security," in Industrial Communication Technology Handbook, 2nd ed., R. Zurawski, Ed. CRC Press, 2015, ch. 37, pp. 37-1–37-14.
+[10] H. Krawczyk and P. Eronen, "HMAC-based Extract-and-Expand Key Derivation Function (HKDF)," RFC 5869, Internet Engineering Task Force, May 2010. [Online]. Available: https://tools.ietf.org/html/rfc5869
 
-[11] H. Krawczyk and P. Eronen, "HMAC-based Extract-and-Expand Key Derivation Function (HKDF)," RFC 5869, Internet Engineering Task Force, May 2010. [Online]. Available: https://tools.ietf.org/html/rfc5869
+[11] A. Rukhin et al., "A Statistical Test Suite for Random and Pseudorandom Number Generators for Cryptographic Applications," NIST Special Publication 800-22 Rev. 1a, National Institute of Standards and Technology, Apr. 2010. [Online]. Available: https://nvlpubs.nist.gov/nistpubs/Legacy/SP/nistspecialpublication800-22r1a.pdf
 
-[12] A. Rukhin et al., "A Statistical Test Suite for Random and Pseudorandom Number Generators for Cryptographic Applications," NIST Special Publication 800-22 Rev. 1a, National Institute of Standards and Technology, 2010.
-
-[13] R. G. Brown, "Dieharder: A Random Number Test Suite," 2024. [Online]. Available: https://webhome.phy.duke.edu/~rgb/General/dieharder.php. [Accessed: 25-Oct-2025].
+[12] R. G. Brown, "Dieharder: A Random Number Test Suite," 2024. [Online]. Available: https://webhome.phy.duke.edu/~rgb/General/dieharder.php. [Accessed: 25-Oct-2025].
 
 ---
 
 ## Code Metadata
 
-| Metadata Item | Description |
-|---------------|-------------|
-| **Current code version** | v1.0.0 |
-| **Permanent link to code/repository** | https://github.com/vbocan/qrng-data-diode |
-| **Legal Code License** | MIT License |
-| **Code versioning system used** | Git |
-| **Software code languages** | Rust 1.75+ |
-| **Compilation requirements** | Rust 1.75+ toolchain, OpenSSL development libraries, Docker & Docker Compose (optional) |
-| **Operating environments** | Linux, macOS, Windows |
-| **Dependencies** | tokio 1.35 (async runtime), axum 0.7 (HTTP server), bytes 1.5 (zero-copy buffers), parking_lot 0.12 (locks), serde 1.0 (serialization), hmac 0.12 + sha2 0.10 (cryptography), crc32fast 1.3 (checksums), prometheus 0.13 (metrics), tracing 0.1 (logging) |
-| **Link to developer documentation** | [Developer Guide](https://github.com/vbocan/qrng-data-diode/blob/master/README.md) |
-| **Support email** | valer.bocan@upt.ro |
+| Metadata Item                         | Description                                                                                                                                                                                                                                               |
+| ------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Current code version**              | v1.0.0                                                                                                                                                                                                                                                    |
+| **Permanent link to code/repository** | https://github.com/vbocan/qrng-data-diode                                                                                                                                                                                                                 |
+| **Legal Code License**                | MIT License                                                                                                                                                                                                                                               |
+| **Code versioning system used**       | Git                                                                                                                                                                                                                                                       |
+| **Software code languages**           | Rust 1.75+                                                                                                                                                                                                                                                |
+| **Compilation requirements**          | Rust 1.75+ toolchain, OpenSSL development libraries, Docker & Docker Compose (optional)                                                                                                                                                                   |
+| **Operating environments**            | Linux, macOS, Windows                                                                                                                                                                                                                                     |
+| **Dependencies**                      | tokio 1.35 (async runtime), axum 0.7 (HTTP server), bytes 1.5 (zero-copy buffers), parking_lot 0.12 (locks), serde 1.0 (serialization), hmac 0.12 + sha2 0.10 (cryptography), crc32fast 1.3 (checksums), prometheus 0.13 (metrics), tracing 0.1 (logging) |
+| **Link to developer documentation**   | [Developer Guide](https://github.com/vbocan/qrng-data-diode/blob/master/README.md)                                                                                                                                                                        |
+| **Support email**                     | valer.bocan@upt.ro                                                                                                                                                                                                                                        |
 
 ---
 
@@ -241,6 +239,6 @@ This research received no specific grant from any funding agency.
 
 ---
 
-*Manuscript prepared for submission to SoftwareX*
+_Manuscript prepared for submission to SoftwareX_
 
-*November 2025*
+_November 2025_
