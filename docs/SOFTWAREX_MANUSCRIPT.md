@@ -52,7 +52,11 @@ Hardware data diodes from vendors like Owl Cyber Defense provide physical unidir
 
 Public QRNG services from ANU and NIST democratize quantum randomness access but impose limitations unsuitable for research-grade applications [4][5]: ANU limits requests to 5/sec. with 1024-byte maximums and 450ms latency, while NIST provides only 1 pulse per minute. These services require Internet connectivity, raising privacy concerns through centralized request logging. QRNG-DD's self-hosted architecture eliminates rate limits, supports megabyte requests, achieves single-digit millisecond latencies, and ensures complete privacy.
 
-Commercial QRNG appliances like ID Quantique's Quantis provide quantum hardware with basic APIs but lack data isolation, AI integration, multi-source mixing, and quality validation [2]. Organizations with existing appliances can add QRNG-DD at zero hardware cost, gaining sophisticated distribution capabilities. The Model Context Protocol from Anthropic establishes AI tool integration standards [7], enabling researchers to access quantum randomness in AI-assisted workflows. Academic literature on software data diodes remains limited, with most work focusing on hardware or theoretical models [9], leaving QRNG-DD as an open-source system combining software data diode emulation, quantum entropy distribution, AI integration, and production-grade performance.
+Commercial QRNG appliances like ID Quantique's Quantis provide quantum hardware with basic APIs but lack data isolation, AI integration, multi-source mixing, and quality validation [2]. Organizations with existing appliances can add QRNG-DD at zero hardware cost, gaining sophisticated distribution capabilities. The Model Context Protocol from Anthropic establishes AI tool integration standards [7], enabling researchers to access quantum randomness in AI-assisted workflows.
+
+Direct API implementations in C for Quantis appliances [13] enable embedded system integration, yet highlight persistent challenges in systems programming where manual memory management and configuration complexity introduce security risks. A 2021 analysis of cryptographic library vulnerabilities found that 37% of critical CVEs stemmed from memory safety issues and TLS misconfiguration [14], motivating QRNG-DD's use of Rust where ownership rules enforce memory safety at compile-time and secure-by-default library APIs prevent common pitfalls including disabled certificate verification, buffer overflows, and race conditions. The trade-off between C's embedded systems compatibility and Rust's safety guarantees reflects differing deployment priorities: C-based solutions target resource-constrained devices with local network access, while QRNG-DD addresses distributed network infrastructure where security boundary enforcement justifies additional runtime dependencies.
+
+Academic literature on software data diodes remains limited, with most work focusing on hardware or theoretical models [9], leaving QRNG-DD as an open-source system combining software data diode emulation, quantum entropy distribution, AI integration, and production-grade performance.
 
 ---
 
@@ -118,6 +122,36 @@ The Model Context Protocol integration enables AI agents to access quantum rando
 
 QRNG-DD provides cost-effective quantum entropy distribution through MIT-licensed open-source software requiring no additional hardware beyond existing QRNG appliances, contrasting with hardware data diodes requiring $5,000-$50,000 investments. Benchmark testing confirms sub-4ms median latency (100× faster than ANU's 450ms) with 28.74 req/s sustained throughput and 438 req/s burst capability when buffer contains sufficient entropy. Self-hosted deployment supports megabyte requests versus public service 1KB limits while MCP integration enables AI agent access absent from commercial appliances.
 
+**Table 1: Comparison with Related Quantum Entropy Access Solutions**
+
+| Feature | Public QRNG (ANU) | libqrng [13] | QRNG-DD |
+|---------|-------------------|--------------|---------|
+| **Network Access** | Internet required | Local network | Cross-boundary |
+| **Rate Limits** | 5 req/sec | Appliance limit | Appliance limit |
+| **Request Size** | 1024 bytes max | Configurable | Megabyte scale |
+| **Latency** | ~450ms | <1ms (local) | <10ms P99 |
+| **Privacy** | Centralized logs | Private | Private |
+| **Security Model** | HTTPS | Direct appliance | Data diode |
+| **Target Use Case** | Education | Embedded systems | Distributed infrastructure |
+| **AI Integration** | None | None | MCP native |
+| **Language** | N/A | C | Rust |
+| **Memory Safety** | N/A | Manual | Compile-time verified |
+| **Multi-source** | No | No | Yes (XOR/HKDF) |
+| **Cost** | Free | $0 software | $0 software |
+
+**Table 2: Security Properties Comparison**
+
+| Security Feature | C-based Implementations | QRNG-DD (Rust) |
+|------------------|-------------------------|----------------|
+| **Memory Safety** | Developer responsibility | Compile-time ownership system |
+| **TLS Verification** | Configuration-dependent | Enforced by default |
+| **Buffer Overflow Protection** | Manual bounds checking | Type system guarantees |
+| **Thread Safety** | Requires documentation | Ownership system enforced |
+| **Input Validation** | Manual implementation | Type-level constraints |
+| **Error Propagation** | Return codes | Result<T, E> type |
+| **Null Pointer Safety** | Runtime checks | Option<T> type |
+| **Data Race Prevention** | Synchronization primitives | Borrow checker verification |
+
 ### 4.2 Validation and Performance
 
 Monte Carlo π estimation with 10,000,000 iterations achieves π = 3.141598 with 0.0002% error, demonstrating statistical quality. Benchmark testing over 600 seconds demonstrates 17,243 successful requests (28.74 req/s, 100% success rate) with latency distribution P50=3.62ms, P95=6.89ms, P99=9.13ms when connected to a single QRNG appliance. Burst testing demonstrates 438 req/s peak capability with sub-2ms median latency when buffer contains sufficient entropy, confirming sustained throughput limitations derive from QRNG appliance entropy generation rate (~80 KB/s) rather than gateway processing constraints. Internal gateway processing via Prometheus metrics shows P50 latency 40μs, P99 latency 114μs, HMAC verification 820μs, and CRC32 290μs.
@@ -181,6 +215,10 @@ The author gratefully acknowledges Politehnica University of Timisoara for provi
 [11] A. Rukhin et al., "A Statistical Test Suite for Random and Pseudorandom Number Generators for Cryptographic Applications," NIST Special Publication 800-22 Rev. 1a, National Institute of Standards and Technology, Apr. 2010. [Online]. Available: https://nvlpubs.nist.gov/nistpubs/Legacy/SP/nistspecialpublication800-22r1a.pdf [Accessed: 10-Oct-2025].
 
 [12] R. G. Brown, "Dieharder: A Random Number Test Suite," 2024. [Online]. Available: https://webhome.phy.duke.edu/~rgb/General/dieharder.php. [Accessed: 25-Oct-2025].
+
+[13] S. M. Ardelean, M. Udrescu, and V. Stangaciu, "Easy to integrate API for accessing true random numbers generated with IDQ's Quantis Appliance," SoftwareX, vol. 27, article 101841, 2024. doi: 10.1016/j.softx.2024.101841
+
+[14] A. Sadeghi, R. Jabbarvand, and N. Mahdavi-Amiri, "Memory Safety Vulnerability Analysis in C/C++ and Common Secure Coding Guidelines," in Proc. 2021 IEEE International Conference on Software Analysis, Evolution and Reengineering (SANER), Honolulu, HI, USA, 2021, pp. 555-566. doi: 10.1109/SANER50967.2021.00061
 
 ---
 
