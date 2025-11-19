@@ -21,9 +21,12 @@
     Updated: 2025-11-17 - Optimized to use /api/uuid endpoint
 #>
 
-# Hardcoded configuration
-$GatewayUrl = "http://localhost:7764"
-$ApiKey = "test-key-1234567890"
+param(
+    [string]$GatewayUrl = "http://localhost:7764",
+    [string]$ApiKey = "test-key-1234567890"
+)
+
+# Configuration
 $PasswordLength = 20
 $PasswordsPerCycle = 3
 $UUIDsPerCycle = 5
