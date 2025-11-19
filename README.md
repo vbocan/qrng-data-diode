@@ -11,14 +11,15 @@
 
 A high-performance, secure bridge service that exposes Quantum Random Number Generator (QRNG) entropy to external networks using software-based data diode emulation. Designed for academic research, cryptographic applications, and scientific computing with true quantum randomness.
 
-![Quantis QRNG Appliance](docs/images/quantis-appliance.png)
+![Quantis QRNG Appliance](docs/images/quantis-appliance.webp)
+
 *IDQuantique Quantis QRNG Appliance - Hardware quantum entropy source*
 
 ## Quick Start - Try the Live Service
 
 ### Live QRNG Gateway
 
-Get quantum random data instantly from our live gateway at **https://qrng.dataman.ro**:
+Get quantum random data instantly from the live gateway at **https://qrng.dataman.ro** (10MB buffer, EU-hosted for low latency).
 
 ```bash
 # Get 32 bytes of quantum random data (hex encoded)
@@ -34,7 +35,7 @@ curl "https://qrng.dataman.ro/api/integers?count=16&min=0&max=100&api_key=test-k
 curl "https://qrng.dataman.ro/api/floats?count=10&api_key=test-key-1234567890"
 
 # Check service health (returns HTTP 200 if healthy)
-curl "https://qrng.dataman.ro/health"
+curl --show-headers "https://qrng.dataman.ro/health"
 
 # Get detailed service status (query parameter)
 curl "https://qrng.dataman.ro/api/status?api_key=test-key-1234567890"
