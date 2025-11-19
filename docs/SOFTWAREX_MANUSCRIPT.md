@@ -174,11 +174,11 @@ The author gratefully acknowledges Politehnica University of Timisoara for provi
 
 [8] C. H. Bennett, G. Brassard, and J.-M. Robert, "Privacy amplification by public discussion," SIAM Journal on Computing, vol. 17, no. 2, pp. 210-229, 1988. doi: 10.1137/0217014
 
-[9] A. Ginter and J. Tschersich, "Unidirectional Gateways and Industrial Network Security," in Proc. 14th Int. Conf. Accelerator and Large Experimental Physics Control Systems (ICALEPCS'13), San Francisco, CA, USA, Oct. 2013, paper THCOBA02.  [Online]Available: https://proceedings.jacow.org/ICALEPCS2013/papers/thcoba02.pdf [Accessed: 19-Nov-2025]
+[9] A. Ginter and J. Tschersich, "Unidirectional Gateways and Industrial Network Security," in Proc. 14th Int. Conf. Accelerator and Large Experimental Physics Control Systems (ICALEPCS'13), San Francisco, CA, USA, Oct. 2013, paper THCOBA02.  [Online] Available: https://proceedings.jacow.org/ICALEPCS2013/papers/thcoba02.pdf [Accessed: 19-Nov-2025]
 
-[10] H. Krawczyk and P. Eronen, "HMAC-based Extract-and-Expand Key Derivation Function (HKDF)," RFC 5869, Internet Engineering Task Force, May 2010. [Online]. Available: https://tools.ietf.org/html/rfc5869
+[10] H. Krawczyk and P. Eronen, "HMAC-based Extract-and-Expand Key Derivation Function (HKDF)," RFC 5869, Internet Engineering Task Force, May 2010. [Online]. Available: https://tools.ietf.org/html/rfc5869 [Accessed: 10-Oct-2025].
 
-[11] A. Rukhin et al., "A Statistical Test Suite for Random and Pseudorandom Number Generators for Cryptographic Applications," NIST Special Publication 800-22 Rev. 1a, National Institute of Standards and Technology, Apr. 2010. [Online]. Available: https://nvlpubs.nist.gov/nistpubs/Legacy/SP/nistspecialpublication800-22r1a.pdf
+[11] A. Rukhin et al., "A Statistical Test Suite for Random and Pseudorandom Number Generators for Cryptographic Applications," NIST Special Publication 800-22 Rev. 1a, National Institute of Standards and Technology, Apr. 2010. [Online]. Available: https://nvlpubs.nist.gov/nistpubs/Legacy/SP/nistspecialpublication800-22r1a.pdf [Accessed: 10-Oct-2025].
 
 [12] R. G. Brown, "Dieharder: A Random Number Test Suite," 2024. [Online]. Available: https://webhome.phy.duke.edu/~rgb/General/dieharder.php. [Accessed: 25-Oct-2025].
 
