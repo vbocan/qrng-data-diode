@@ -14,8 +14,8 @@ exclude = [
 version = "0.1.0"
 edition = "2021"
 license = "MIT"
-authors = ["QRNG Data Diode Contributors"]
-repository = "https://github.com/yourusername/qrng-data-diode"
+authors = ["Valer Bocan, PhD, CSSLP"]
+repository = "https://github.com/vbocan/qrng-data-diode"
 keywords = ["quantum", "rng", "entropy", "cryptography", "security"]
 categories = ["cryptography", "network-programming", "science"]
 
