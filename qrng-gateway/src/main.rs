@@ -24,7 +24,7 @@
 
 use anyhow::{Context, Result};
 use axum::{
-    extract::{Query, State},
+    extract::{ConnectInfo, Query, State},
     http::{HeaderMap, StatusCode},
     response::{IntoResponse, Response},
     routing::{get, post},
@@ -138,6 +138,45 @@ fn extract_api_key(headers: &HeaderMap, config: &GatewayConfig) -> Result<String
     Err(StatusCode::UNAUTHORIZED)
 }
 
+/// Extract User-Agent from headers
+fn extract_user_agent(headers: &HeaderMap) -> String {
+    headers
+        .get("user-agent")
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("unknown")
+        .to_string()
+}
+
+/// Mask API key for logging (show last 4 chars only)
+fn mask_api_key(key: &str) -> String {
+    if key.len() <= 4 {
+        "****".to_string()
+    } else {
+        format!("****{}", &key[key.len() - 4..])
+    }
+}
+
+/// Log client connection details
+fn log_client_request(
+    ip: SocketAddr,
+    user_agent: &str,
+    endpoint: &str,
+    api_key: &str,
+    request_info: &str,
+    status: StatusCode,
+) {
+    let masked_key = mask_api_key(api_key);
+    info!(
+        client_ip = %ip,
+        user_agent = %user_agent,
+        endpoint = %endpoint,
+        api_key = %masked_key,
+        request = %request_info,
+        status = %status.as_u16(),
+        "Client request"
+    );
+}
+
 /// Query parameters for /api/random endpoint
 #[derive(serde::Deserialize)]
 struct RandomQuery {
@@ -203,41 +242,100 @@ struct StatusQuery {
 /// GET /api/random - Serve random entropy
 async fn serve_random(
     State(state): State<AppState>,
+    ConnectInfo(addr): ConnectInfo<SocketAddr>,
     Query(params): Query<RandomQuery>,
     headers: HeaderMap,
 ) -> Result<Response, StatusCode> {
     let start = Instant::now();
+    let user_agent = extract_user_agent(&headers);
 
     // Extract API key (from header or query param)
     let api_key = if let Some(key) = params.api_key {
         if state.config.api_keys.contains(&key) {
             key
         } else {
+            log_client_request(
+                addr,
+                &user_agent,
+                "/api/random",
+                "",
+                &format!("bytes={}", params.bytes),
+                StatusCode::UNAUTHORIZED,
+            );
             return Err(StatusCode::UNAUTHORIZED);
         }
     } else {
-        extract_api_key(&headers, &state.config)?
+        match extract_api_key(&headers, &state.config) {
+            Ok(key) => key,
+            Err(status) => {
+                log_client_request(
+                    addr,
+                    &user_agent,
+                    "/api/random",
+                    "",
+                    &format!("bytes={}", params.bytes),
+                    status,
+                );
+                return Err(status);
+            }
+        }
     };
 
     // Rate limiting
     if !state.rate_limiter.check(&api_key) {
         state.metrics.record_request_failure();
+        log_client_request(
+            addr,
+            &user_agent,
+            "/api/random",
+            &api_key,
+            &format!("bytes={}", params.bytes),
+            StatusCode::TOO_MANY_REQUESTS,
+        );
         return Err(StatusCode::TOO_MANY_REQUESTS);
     }
 
     // Validate request size
     if params.bytes == 0 || params.bytes > qrng_core::MAX_REQUEST_SIZE {
+        log_client_request(
+            addr,
+            &user_agent,
+            "/api/random",
+            &api_key,
+            &format!("bytes={} (invalid)", params.bytes),
+            StatusCode::BAD_REQUEST,
+        );
         return Err(StatusCode::BAD_REQUEST);
     }
 
     // Parse encoding
-    let encoding = EncodingFormat::parse(&params.encoding)
-        .ok_or(StatusCode::BAD_REQUEST)?;
+    let encoding = match EncodingFormat::parse(&params.encoding) {
+        Some(e) => e,
+        None => {
+            log_client_request(
+                addr,
+                &user_agent,
+                "/api/random",
+                &api_key,
+                &format!("bytes={} encoding={} (invalid)", params.bytes, params.encoding),
+                StatusCode::BAD_REQUEST,
+            );
+            return Err(StatusCode::BAD_REQUEST);
+        }
+    };
 
     // Get entropy from buffer
     let data = state.buffer.pop(params.bytes)
         .ok_or_else(|| {
             state.metrics.record_request_failure();
+            log_client_request(
+                addr,
+                &user_agent,
+                "/api/random",
+                &api_key,
+                &format!("bytes={} encoding={}", params.bytes, params.encoding),
+                StatusCode::SERVICE_UNAVAILABLE,
+            );
             StatusCode::SERVICE_UNAVAILABLE
         })?;
 
@@ -252,6 +350,16 @@ async fn serve_random(
     let latency = start.elapsed().as_micros() as u64;
     state.metrics.record_request(params.bytes, latency);
 
+    // Log successful request
+    log_client_request(
+        addr,
+        &user_agent,
+        "/api/random",
+        &api_key,
+        &format!("bytes={} encoding={}", params.bytes, params.encoding),
+        StatusCode::OK,
+    );
+
     Ok((
         StatusCode::OK,
         [(hyper::header::CONTENT_TYPE, content_type)],
@@ -263,18 +371,42 @@ async fn serve_random(
 /// GET /api/status - System status
 async fn get_status(
     State(state): State<AppState>,
+    ConnectInfo(addr): ConnectInfo<SocketAddr>,
     Query(params): Query<StatusQuery>,
     headers: HeaderMap,
 ) -> Result<Json<GatewayStatus>, StatusCode> {
+    let user_agent = extract_user_agent(&headers);
+
     // Extract API key (from header or query param)
-    let _api_key = if let Some(key) = params.api_key {
+    let api_key = if let Some(key) = params.api_key {
         if state.config.api_keys.contains(&key) {
             key
         } else {
+            log_client_request(
+                addr,
+                &user_agent,
+                "/api/status",
+                "",
+                "status_check",
+                StatusCode::UNAUTHORIZED,
+            );
             return Err(StatusCode::UNAUTHORIZED);
         }
     } else {
-        extract_api_key(&headers, &state.config)?
+        match extract_api_key(&headers, &state.config) {
+            Ok(key) => key,
+            Err(status) => {
+                log_client_request(
+                    addr,
+                    &user_agent,
+                    "/api/status",
+                    "",
+                    "status_check",
+                    status,
+                );
+                return Err(status);
+            }
+        }
     };
 
     let fill_percent = state.buffer.fill_percent();
@@ -295,6 +427,15 @@ async fn get_status(
             warnings.push(format!("Data is {} seconds old", age));
         }
     }
+
+    log_client_request(
+        addr,
+        &user_agent,
+        "/api/status",
+        &api_key,
+        &format!("buffer_fill={:.1}%", fill_percent),
+        StatusCode::OK,
+    );
 
     Ok(Json(GatewayStatus {
         status,        
@@ -322,34 +463,81 @@ async fn health_check(State(state): State<AppState>) -> StatusCode {
 /// GET /api/integers - Generate random integers in range
 async fn serve_integers(
     State(state): State<AppState>,
+    ConnectInfo(addr): ConnectInfo<SocketAddr>,
     Query(params): Query<IntegersQuery>,
     headers: HeaderMap,
 ) -> Result<Response, StatusCode> {
     let start = Instant::now();
+    let user_agent = extract_user_agent(&headers);
 
     // Extract and validate API key
     let api_key = if let Some(key) = params.api_key {
         if state.config.api_keys.contains(&key) {
             key
         } else {
+            log_client_request(
+                addr,
+                &user_agent,
+                "/api/integers",
+                "",
+                &format!("count={} min={} max={}", params.count, params.min, params.max),
+                StatusCode::UNAUTHORIZED,
+            );
             return Err(StatusCode::UNAUTHORIZED);
         }
     } else {
-        extract_api_key(&headers, &state.config)?
+        match extract_api_key(&headers, &state.config) {
+            Ok(key) => key,
+            Err(status) => {
+                log_client_request(
+                    addr,
+                    &user_agent,
+                    "/api/integers",
+                    "",
+                    &format!("count={} min={} max={}", params.count, params.min, params.max),
+                    status,
+                );
+                return Err(status);
+            }
+        }
     };
 
     // Rate limiting
     if !state.rate_limiter.check(&api_key) {
         state.metrics.record_request_failure();
+        log_client_request(
+            addr,
+            &user_agent,
+            "/api/integers",
+            &api_key,
+            &format!("count={} min={} max={}", params.count, params.min, params.max),
+            StatusCode::TOO_MANY_REQUESTS,
+        );
         return Err(StatusCode::TOO_MANY_REQUESTS);
     }
 
     // Validate parameters
     if params.count == 0 || params.count > 1000 {
+        log_client_request(
+            addr,
+            &user_agent,
+            "/api/integers",
+            &api_key,
+            &format!("count={} (invalid)", params.count),
+            StatusCode::BAD_REQUEST,
+        );
         return Err(StatusCode::BAD_REQUEST);
     }
 
     if params.min >= params.max {
+        log_client_request(
+            addr,
+            &user_agent,
+            "/api/integers",
+            &api_key,
+            &format!("min={} max={} (invalid)", params.min, params.max),
+            StatusCode::BAD_REQUEST,
+        );
         return Err(StatusCode::BAD_REQUEST);
     }
 
@@ -360,6 +548,14 @@ async fn serve_integers(
     let data = state.buffer.pop(bytes_needed)
         .ok_or_else(|| {
             state.metrics.record_request_failure();
+            log_client_request(
+                addr,
+                &user_agent,
+                "/api/integers",
+                &api_key,
+                &format!("count={} min={} max={}", params.count, params.min, params.max),
+                StatusCode::SERVICE_UNAVAILABLE,
+            );
             StatusCode::SERVICE_UNAVAILABLE
         })?;
 
@@ -377,6 +573,16 @@ async fn serve_integers(
     let latency = start.elapsed().as_micros() as u64;
     state.metrics.record_request(bytes_needed, latency);
 
+    // Log successful request
+    log_client_request(
+        addr,
+        &user_agent,
+        "/api/integers",
+        &api_key,
+        &format!("count={} min={} max={}", params.count, params.min, params.max),
+        StatusCode::OK,
+    );
+
     // Return as JSON array
     Ok((
         StatusCode::OK,
@@ -389,30 +595,69 @@ async fn serve_integers(
 /// GET /api/floats - Generate random floats in [0, 1)
 async fn serve_floats(
     State(state): State<AppState>,
+    ConnectInfo(addr): ConnectInfo<SocketAddr>,
     Query(params): Query<FloatsQuery>,
     headers: HeaderMap,
 ) -> Result<Response, StatusCode> {
     let start = Instant::now();
+    let user_agent = extract_user_agent(&headers);
 
     // Extract and validate API key
     let api_key = if let Some(key) = params.api_key {
         if state.config.api_keys.contains(&key) {
             key
         } else {
+            log_client_request(
+                addr,
+                &user_agent,
+                "/api/floats",
+                "",
+                &format!("count={}", params.count),
+                StatusCode::UNAUTHORIZED,
+            );
             return Err(StatusCode::UNAUTHORIZED);
         }
     } else {
-        extract_api_key(&headers, &state.config)?
+        match extract_api_key(&headers, &state.config) {
+            Ok(key) => key,
+            Err(status) => {
+                log_client_request(
+                    addr,
+                    &user_agent,
+                    "/api/floats",
+                    "",
+                    &format!("count={}", params.count),
+                    status,
+                );
+                return Err(status);
+            }
+        }
     };
 
     // Rate limiting
     if !state.rate_limiter.check(&api_key) {
         state.metrics.record_request_failure();
+        log_client_request(
+            addr,
+            &user_agent,
+            "/api/floats",
+            &api_key,
+            &format!("count={}", params.count),
+            StatusCode::TOO_MANY_REQUESTS,
+        );
         return Err(StatusCode::TOO_MANY_REQUESTS);
     }
 
     // Validate parameters
     if params.count == 0 || params.count > 1000 {
+        log_client_request(
+            addr,
+            &user_agent,
+            "/api/floats",
+            &api_key,
+            &format!("count={} (invalid)", params.count),
+            StatusCode::BAD_REQUEST,
+        );
         return Err(StatusCode::BAD_REQUEST);
     }
 
@@ -421,6 +666,14 @@ async fn serve_floats(
     let data = state.buffer.pop(bytes_needed)
         .ok_or_else(|| {
             state.metrics.record_request_failure();
+            log_client_request(
+                addr,
+                &user_agent,
+                "/api/floats",
+                &api_key,
+                &format!("count={}", params.count),
+                StatusCode::SERVICE_UNAVAILABLE,
+            );
             StatusCode::SERVICE_UNAVAILABLE
         })?;
 
@@ -439,6 +692,16 @@ async fn serve_floats(
     let latency = start.elapsed().as_micros() as u64;
     state.metrics.record_request(bytes_needed, latency);
 
+    // Log successful request
+    log_client_request(
+        addr,
+        &user_agent,
+        "/api/floats",
+        &api_key,
+        &format!("count={}", params.count),
+        StatusCode::OK,
+    );
+
     // Return as JSON array
     Ok((
         StatusCode::OK,
@@ -451,30 +714,69 @@ async fn serve_floats(
 /// GET /api/uuid - Generate UUID v4
 async fn serve_uuid(
     State(state): State<AppState>,
+    ConnectInfo(addr): ConnectInfo<SocketAddr>,
     Query(params): Query<UuidQuery>,
     headers: HeaderMap,
 ) -> Result<Response, StatusCode> {
     let start = Instant::now();
+    let user_agent = extract_user_agent(&headers);
 
     // Extract and validate API key
     let api_key = if let Some(key) = params.api_key {
         if state.config.api_keys.contains(&key) {
             key
         } else {
+            log_client_request(
+                addr,
+                &user_agent,
+                "/api/uuid",
+                "",
+                &format!("count={}", params.count),
+                StatusCode::UNAUTHORIZED,
+            );
             return Err(StatusCode::UNAUTHORIZED);
         }
     } else {
-        extract_api_key(&headers, &state.config)?
+        match extract_api_key(&headers, &state.config) {
+            Ok(key) => key,
+            Err(status) => {
+                log_client_request(
+                    addr,
+                    &user_agent,
+                    "/api/uuid",
+                    "",
+                    &format!("count={}", params.count),
+                    status,
+                );
+                return Err(status);
+            }
+        }
     };
 
     // Rate limiting
     if !state.rate_limiter.check(&api_key) {
         state.metrics.record_request_failure();
+        log_client_request(
+            addr,
+            &user_agent,
+            "/api/uuid",
+            &api_key,
+            &format!("count={}", params.count),
+            StatusCode::TOO_MANY_REQUESTS,
+        );
         return Err(StatusCode::TOO_MANY_REQUESTS);
     }
 
     // Validate parameters
     if params.count == 0 || params.count > 100 {
+        log_client_request(
+            addr,
+            &user_agent,
+            "/api/uuid",
+            &api_key,
+            &format!("count={} (invalid)", params.count),
+            StatusCode::BAD_REQUEST,
+        );
         return Err(StatusCode::BAD_REQUEST);
     }
 
@@ -483,6 +785,14 @@ async fn serve_uuid(
     let data = state.buffer.pop(bytes_needed)
         .ok_or_else(|| {
             state.metrics.record_request_failure();
+            log_client_request(
+                addr,
+                &user_agent,
+                "/api/uuid",
+                &api_key,
+                &format!("count={}", params.count),
+                StatusCode::SERVICE_UNAVAILABLE,
+            );
             StatusCode::SERVICE_UNAVAILABLE
         })?;
 
@@ -503,6 +813,16 @@ async fn serve_uuid(
     // Record metrics
     let latency = start.elapsed().as_micros() as u64;
     state.metrics.record_request(bytes_needed, latency);
+
+    // Log successful request
+    log_client_request(
+        addr,
+        &user_agent,
+        "/api/uuid",
+        &api_key,
+        &format!("count={}", params.count),
+        StatusCode::OK,
+    );
 
     // Return as single string or JSON array
     let response_body = if params.count == 1 {
@@ -560,23 +880,69 @@ struct PseudoComparison {
 /// POST /api/test/monte-carlo - Run Monte Carlo π estimation test
 async fn monte_carlo_test(
     State(state): State<AppState>,
+    ConnectInfo(addr): ConnectInfo<SocketAddr>,
     headers: HeaderMap,
     Query(params): Query<MonteCarloParams>,
 ) -> Result<Json<MonteCarloResult>, AppError> {
+    let user_agent = extract_user_agent(&headers);
+
     // Extract and validate API key
     let api_key = match params.api_key {
-        Some(ref key) => key.clone(),
-        None => extract_api_key(&headers, &state.config)?,
+        Some(ref key) => {
+            if state.config.api_keys.contains(key) {
+                key.clone()
+            } else {
+                log_client_request(
+                    addr,
+                    &user_agent,
+                    "/api/test/monte-carlo",
+                    "",
+                    &format!("iterations={}", params.iterations),
+                    StatusCode::UNAUTHORIZED,
+                );
+                return Err(AppError(StatusCode::UNAUTHORIZED, "Invalid API key".to_string()));
+            }
+        }
+        None => match extract_api_key(&headers, &state.config) {
+            Ok(key) => key,
+            Err(status) => {
+                log_client_request(
+                    addr,
+                    &user_agent,
+                    "/api/test/monte-carlo",
+                    "",
+                    &format!("iterations={}", params.iterations),
+                    status,
+                );
+                return Err(AppError(status, "Authentication required".to_string()));
+            }
+        },
     };
 
     // Rate limiting
     if !state.rate_limiter.check(&api_key) {
+        log_client_request(
+            addr,
+            &user_agent,
+            "/api/test/monte-carlo",
+            &api_key,
+            &format!("iterations={}", params.iterations),
+            StatusCode::TOO_MANY_REQUESTS,
+        );
         return Err(AppError(StatusCode::TOO_MANY_REQUESTS, "Rate limit exceeded".to_string()));
     }
 
     // Validate iterations
     const MAX_ITERATIONS: u64 = 10_000_000;
     if params.iterations == 0 || params.iterations > MAX_ITERATIONS {
+        log_client_request(
+            addr,
+            &user_agent,
+            "/api/test/monte-carlo",
+            &api_key,
+            &format!("iterations={} (invalid)", params.iterations),
+            StatusCode::BAD_REQUEST,
+        );
         return Err(AppError(
             StatusCode::BAD_REQUEST,
             format!("iterations must be between 1 and {}", MAX_ITERATIONS),
@@ -663,6 +1029,16 @@ async fn monte_carlo_test(
         quantum_pi, quantum_error, quantum_error_percent
     );
 
+    // Log successful request
+    log_client_request(
+        addr,
+        &user_agent,
+        "/api/test/monte-carlo",
+        &api_key,
+        &format!("iterations={}", params.iterations),
+        StatusCode::OK,
+    );
+
     Ok(Json(MonteCarloResult {
         estimated_pi: quantum_pi,
         error: quantum_error,
@@ -701,18 +1077,36 @@ fn estimate_pi(floats: &[f64]) -> f64 {
 /// POST /push - Receive entropy packets (push mode only)
 async fn receive_push(
     State(state): State<AppState>,
+    ConnectInfo(addr): ConnectInfo<SocketAddr>,
+    headers: HeaderMap,
     body: axum::body::Bytes,
-) -> StatusCode {    
+) -> StatusCode {
+    let user_agent = extract_user_agent(&headers);
+    
     let signer = match &state.signer {
         Some(s) => s,
-        None => return StatusCode::INTERNAL_SERVER_ERROR,
+        None => {
+            warn!(
+                client_ip = %addr,
+                user_agent = %user_agent,
+                endpoint = "/push",
+                "Push endpoint called but HMAC signer not configured"
+            );
+            return StatusCode::INTERNAL_SERVER_ERROR;
+        }
     };
 
     // Deserialize packet
     let packet = match EntropyPacket::from_msgpack(&body) {
         Ok(p) => p,
         Err(e) => {
-            error!("Failed to deserialize packet: {}", e);
+            warn!(
+                client_ip = %addr,
+                user_agent = %user_agent,
+                endpoint = "/push",
+                error = %e,
+                "Failed to deserialize entropy packet"
+            );
             return StatusCode::BAD_REQUEST;
         }
     };
@@ -721,25 +1115,50 @@ async fn receive_push(
     match signer.verify_packet(&packet) {
         Ok(true) => {}
         Ok(false) => {
-            warn!("Invalid packet signature");
+            warn!(
+                client_ip = %addr,
+                user_agent = %user_agent,
+                endpoint = "/push",
+                sequence = packet.sequence,
+                "Invalid packet signature"
+            );
             return StatusCode::UNAUTHORIZED;
         }
         Err(e) => {
-            error!("Signature verification error: {}", e);
+            error!(
+                client_ip = %addr,
+                user_agent = %user_agent,
+                endpoint = "/push",
+                sequence = packet.sequence,
+                error = %e,
+                "Signature verification error"
+            );
             return StatusCode::INTERNAL_SERVER_ERROR;
         }
     }
 
     // Verify checksum if present
     if !packet.verify_checksum() {
-        warn!("Checksum mismatch");
+        warn!(
+            client_ip = %addr,
+            user_agent = %user_agent,
+            endpoint = "/push",
+            sequence = packet.sequence,
+            "Checksum mismatch"
+        );
         return StatusCode::BAD_REQUEST;
     }
 
     // Check freshness
     if let Some(ttl) = state.config.buffer_ttl() {
         if packet.is_stale(ttl) {
-            warn!("Packet is stale");
+            warn!(
+                client_ip = %addr,
+                user_agent = %user_agent,
+                endpoint = "/push",
+                sequence = packet.sequence,
+                "Packet is stale"
+            );
             return StatusCode::BAD_REQUEST;
         }
     }
@@ -749,32 +1168,48 @@ async fn receive_push(
         Ok(bytes) => {
             if bytes == 0 {
                 warn!(
-                    "Discarded packet #{}, buffer full at {:.1}%",
-                    packet.sequence,
-                    state.buffer.fill_percent()
+                    client_ip = %addr,
+                    user_agent = %user_agent,
+                    endpoint = "/push",
+                    sequence = packet.sequence,
+                    buffer_fill_percent = state.buffer.fill_percent(),
+                    "Discarded packet, buffer full"
                 );
                 StatusCode::INSUFFICIENT_STORAGE
             } else if bytes < packet.data.len() {
                 info!(
-                    "Received packet #{}, stored {} of {} bytes (partial), buffer: {:.1}%",
-                    packet.sequence,
-                    bytes,
-                    packet.data.len(),
-                    state.buffer.fill_percent()
+                    client_ip = %addr,
+                    user_agent = %user_agent,
+                    endpoint = "/push",
+                    sequence = packet.sequence,
+                    bytes_stored = bytes,
+                    bytes_total = packet.data.len(),
+                    buffer_fill_percent = state.buffer.fill_percent(),
+                    "Received packet (partial)"
                 );
                 StatusCode::OK
             } else {
                 info!(
-                    "Received packet #{}, {} bytes, buffer: {:.1}%",
-                    packet.sequence,
-                    bytes,
-                    state.buffer.fill_percent()
+                    client_ip = %addr,
+                    user_agent = %user_agent,
+                    endpoint = "/push",
+                    sequence = packet.sequence,
+                    bytes = bytes,
+                    buffer_fill_percent = state.buffer.fill_percent(),
+                    "Received packet"
                 );
                 StatusCode::OK
             }
         }
         Err(e) => {
-            error!("Failed to push to buffer: {}", e);
+            error!(
+                client_ip = %addr,
+                user_agent = %user_agent,
+                endpoint = "/push",
+                sequence = packet.sequence,
+                error = %e,
+                "Failed to push to buffer"
+            );
             StatusCode::INSUFFICIENT_STORAGE
         }
     }
@@ -874,7 +1309,11 @@ async fn main() -> Result<()> {
 
     // Start server with graceful shutdown
     let listener = tokio::net::TcpListener::bind(addr).await?;
-    let server = axum::serve(listener, app).with_graceful_shutdown(async move {
+    let server = axum::serve(
+        listener,
+        app.into_make_service_with_connect_info::<SocketAddr>(),
+    )
+    .with_graceful_shutdown(async move {
         cancel_token.cancelled().await;
         info!("Server is shutting down");
     });
