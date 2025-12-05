@@ -34,6 +34,9 @@ curl "https://qrng.dataman.ro/api/integers?count=16&min=0&max=100&api_key=test-k
 # Get random floats between 0 and 1
 curl "https://qrng.dataman.ro/api/floats?count=10&api_key=test-key-1234567890"
 
+# Run Monte Carlo π estimation test (1 million iterations)
+curl "https://qrng.dataman.ro/api/test/monte-carlo?iterations=1000000&api_key=test-key-1234567890"
+
 # Check service health (returns HTTP 200 if healthy)
 curl --show-headers "https://qrng.dataman.ro/health"
 
@@ -123,7 +126,7 @@ Once running, the gateway provides the following endpoints:
 - **Random Floats**: http://localhost:7764/api/floats?count=10&api_key=YOUR_API_KEY
 - **UUID Generation**: http://localhost:7764/api/uuid?count=5&api_key=YOUR_API_KEY
 - **System Status**: http://localhost:7764/api/status?api_key=YOUR_API_KEY
-- **Monte Carlo Test**: http://localhost:7764/api/test/monte-carlo?iterations=1000000&api_key=YOUR_API_KEY (POST)
+- **Monte Carlo Test**: http://localhost:7764/api/test/monte-carlo?iterations=1000000&api_key=YOUR_API_KEY
 
 **Monitoring Endpoints** (no authentication required):
 - **Health Check**: http://localhost:7764/health
