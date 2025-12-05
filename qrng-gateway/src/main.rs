@@ -877,7 +877,7 @@ struct PseudoComparison {
     improvement_factor: f64,
 }
 
-/// POST /api/test/monte-carlo - Run Monte Carlo π estimation test
+/// GET /api/test/monte-carlo - Run Monte Carlo π estimation test
 async fn monte_carlo_test(
     State(state): State<AppState>,
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
@@ -1287,7 +1287,7 @@ async fn main() -> Result<()> {
         .route("/api/floats", get(serve_floats))
         .route("/api/uuid", get(serve_uuid))
         .route("/api/status", get(get_status))
-        .route("/api/test/monte-carlo", post(monte_carlo_test))
+        .route("/api/test/monte-carlo", get(monte_carlo_test))
         .route("/health", get(health_check))
         .route("/metrics", get(get_metrics))
         .route("/push", post(receive_push))
