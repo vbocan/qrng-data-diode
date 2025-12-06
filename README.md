@@ -214,9 +214,3 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - **Issues**: Report bugs and request features via [GitHub Issues](https://github.com/vbocan/qrng-data-diode/issues)
 - **Discussions**: Community support via [GitHub Discussions](https://github.com/vbocan/qrng-data-diode/discussions)
 - **Email**: valer.bocan@upt.ro
-
----
-
-**Version**: 1.0.0  
-**Status**: Active Development  
-**Repository**: https://github.com/vbocan/qrng-data-diode
