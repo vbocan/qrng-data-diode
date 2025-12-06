@@ -34,8 +34,8 @@ curl "https://qrng.dataman.ro/api/integers?count=16&min=0&max=100&api_key=test-k
 # Get random floats between 0 and 1
 curl "https://qrng.dataman.ro/api/floats?count=10&api_key=test-key-1234567890"
 
-# Run Monte Carlo π estimation test (1 million iterations)
-curl "https://qrng.dataman.ro/api/test/monte-carlo?iterations=1000000&api_key=test-key-1234567890"
+# Run Monte Carlo π estimation test (500000 iterations)
+curl "https://qrng.dataman.ro/api/test/monte-carlo?iterations=500000&api_key=test-key-1234567890"
 
 # Check service health (returns HTTP 200 if healthy)
 curl --show-headers "https://qrng.dataman.ro/health"
