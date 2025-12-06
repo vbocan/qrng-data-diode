@@ -272,7 +272,7 @@ impl QrngMcpServer {
         let url = format!("{}/api/test/monte-carlo?iterations={}", self.gateway_url, ITERATIONS);
         
         let response = self.http_client
-            .post(&url)
+            .get(&url)
             .header("Authorization", format!("Bearer {}", self.gateway_api_key))
             .send()
             .await
