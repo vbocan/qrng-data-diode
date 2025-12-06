@@ -1003,10 +1003,10 @@ async fn monte_carlo_test(
     let comparison = if params.iterations <= 1_000_000 {
         // Generate pseudo-random for comparison
         use rand::Rng;
-        let mut rng = rand::thread_rng();
+        let mut rng = rand::rng();
         // Need 2 floats per iteration (x, y coordinates)
         let pseudo_floats: Vec<f64> = (0..(params.iterations * 2))
-            .map(|_| rng.gen::<f64>())
+            .map(|_| rng.random::<f64>())
             .collect();
         let pseudo_pi = estimate_pi(&pseudo_floats);
         let pseudo_error = (pseudo_pi - std::f64::consts::PI).abs();

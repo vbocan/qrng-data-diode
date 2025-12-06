@@ -33,7 +33,7 @@ impl PacketSigner {
     pub fn generate_key() -> Vec<u8> {
         use rand::Rng;
         let mut key = vec![0u8; 32];
-        rand::thread_rng().fill(&mut key[..]);
+        rand::rng().fill(&mut key[..]);
         key
     }
 

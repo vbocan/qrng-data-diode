@@ -21,7 +21,6 @@ chrono = { workspace = true }
 bytes = { workspace = true }
 uuid = { workspace = true }
 url = { workspace = true }
-crossbeam = { workspace = true }
 parking_lot = { workspace = true }
 rand = { workspace = true }
 base64 = "0.22"
