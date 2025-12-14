@@ -2,12 +2,15 @@
 
 ## Executive Summary
 
-This document presents comprehensive performance testing of the QRNG-DD system, conducted on November 18, 2025. Testing reveals that the system achieves excellent latency characteristics (sub-4ms median, sub-10ms P99) with sustained throughput limited by the QRNG appliance's entropy generation rate rather than gateway processing capacity.
+This document presents comprehensive performance testing of the QRNG-DD system. Original benchmarks were conducted on November 18, 2025 (local Docker network), with remote access verification performed on December 14, 2025 against the production server at `qrng.dataman.ro`.
 
-**Key Findings:**
+Testing reveals that the gateway achieves excellent internal latency (~100μs P50) with sustained throughput limited by the QRNG appliance's entropy generation rate rather than gateway processing capacity. End-to-end latency depends on network conditions: sub-4ms on local networks, 50-200ms over the internet.
+
+**Key Findings (Local Network):**
 - **Sustained throughput**: 28.74 req/s (100% success rate over 10 minutes)
 - **Burst capability**: 438 req/s (short-term peak performance)
-- **Latency**: P50 3.62ms, P95 6.89ms, P99 9.13ms
+- **End-to-end latency**: P50 3.62ms, P95 6.89ms, P99 9.13ms
+- **Gateway internal latency**: P50 ~100μs, P99 ~2ms
 - **Bottleneck**: QRNG appliance entropy generation (~80 KB/s), not gateway software
 - **Scaling solution**: Multiple QRNG appliances with multi-source aggregation
 
@@ -83,11 +86,13 @@ Performance testing was conducted using custom PowerShell benchmarking scripts t
 
 ## Test Environment
 
+> **Important Note**: These benchmarks were conducted on a **local Docker network** where network latency is negligible (~1-2ms). When accessing the gateway over the internet, end-to-end latency will be dominated by network round-trip time (RTT), which can range from 50-200ms depending on geographic distance. The gateway's internal processing time (~100μs) remains constant regardless of network conditions.
+
 ### Hardware Configuration
 
 **Client Machine:**
 - **OS**: Windows (Docker Desktop host)
-- **Location**: Local network
+- **Location**: Local network (same host as containers)
 
 **Gateway Container:**
 - **Platform**: Docker
@@ -290,6 +295,33 @@ The original performance benchmarks document claimed ~100 req/s sustained throug
 **Root Cause:**
 Original benchmarks likely tested against a mock data source or different QRNG appliance configuration, not accounting for real-world entropy generation constraints.
 
+### Remote Access Performance
+
+When accessing the gateway over the internet (e.g., production deployment at `qrng.dataman.ro`), performance characteristics change due to network latency:
+
+**Remote Access Test Results (December 2025):**
+
+| Metric | Local Network | Remote Internet |
+|--------|---------------|-----------------|
+| End-to-end P50 latency | 3.62 ms | ~130 ms |
+| Sequential throughput | 28.74 req/s | ~6 req/s |
+| Parallel throughput (50 concurrent) | N/A | ~54 req/s |
+| Gateway internal P50 | 40 μs | 101 μs |
+| Success rate | 100% | 100% |
+
+**Key Observations:**
+- End-to-end latency is dominated by network RTT (~140ms to European server)
+- Gateway internal processing remains fast (~100μs) regardless of client location
+- Parallel requests effectively mitigate network latency impact
+- 100% reliability maintained over internet connections
+
+**For Remote Clients:**
+- Use parallel/concurrent requests to maximize throughput
+- Expect end-to-end latency of 50-200ms depending on geographic distance
+- Gateway processing time is negligible compared to network latency
+
+---
+
 ### Gateway vs. System Performance
 
 It's important to distinguish between gateway processing capability and overall system throughput:
@@ -468,7 +500,8 @@ With 17,243 samples for sustained test and 13,148 for burst test, percentile est
 
 ---
 
-**Test Date**: November 18, 2025  
-**Tester**: Valer Bocan, PhD, CSSLP  
-**System Version**: v1.0.0  
-**Document Version**: 1.0
+**Original Test Date**: November 18, 2025
+**Remote Access Verification**: December 14, 2025
+**Tester**: Valer Bocan, PhD, CSSLP
+**System Version**: v1.0.0
+**Document Version**: 1.1
