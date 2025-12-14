@@ -122,7 +122,28 @@ Multi-source entropy aggregation makes QRNG-DD particularly valuable for cryptog
 
 ### 3.5 Example Implementations
 
-The repository includes 15 Rust applications demonstrating quantum randomness across research domains: cryptographic key generation, UUID generation, Monte Carlo π estimation, genetic algorithms, simulated annealing, random walk simulations, and statistical test suites. PowerShell scripts provide API integration examples for password generation, quality validation, and performance benchmarking. All examples include source code, documentation, and sample outputs supporting reproducible research and educational use.
+The repository includes 15 Rust applications demonstrating quantum randomness across research domains. Below is a simplified example showing REST API integration for fetching quantum random bytes:
+
+```rust
+use reqwest::blocking::get;
+
+fn get_random_bytes(gateway_url: &str, api_key: &str, count: usize) -> Vec<u8> {
+    let url = format!(
+        "{}/api/random?bytes={}&encoding=hex&api_key={}",
+        gateway_url, count, api_key
+    );
+    let response = get(&url).expect("Failed to contact gateway");
+    let hex_data = response.text().expect("Failed to read response");
+    hex::decode(hex_data.trim()).expect("Invalid hex data")
+}
+
+fn main() {
+    let bytes = get_random_bytes("http://localhost:7764", "test-key", 32);
+    println!("Quantum random bytes: {:02x?}", bytes);
+}
+```
+
+Additional examples include Monte Carlo π estimation, genetic algorithms, simulated annealing, random walk simulations, cryptographic key generation, and statistical test suites. PowerShell scripts provide benchmarking and quality validation. All examples include source code, documentation, and sample outputs.
 
 ---
 
