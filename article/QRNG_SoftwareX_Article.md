@@ -26,31 +26,31 @@ QRNG-DD addresses key research challenges including transparent entropy distribu
 
 ### 1.1 Problem Statement
 
-Quantum Random Number Generators (QRNGs) provide randomness derived from fundamental quantum processes, offering a qualitatively different security foundation than pseudo-random number generators that rely on deterministic algorithms [1]. This distinction is critical for cryptographic key generation, scientific simulations requiring unbiased sampling, and security protocols depending on unpredictable values.
+Quantum Random Number Generators (QRNGs) provide randomness derived from fundamental quantum processes, offering a qualitatively different security foundation than pseudo-random number generators that rely on deterministic algorithms [1][2][34]. This distinction is critical for cryptographic key generation [3], scientific simulations requiring unbiased sampling [4], and security protocols depending on unpredictable values [5].
 
-Commercial QRNG appliances such as ID Quantique's Quantis are frequently deployed on isolated internal networks due to security policies [2]. This creates an accessibility paradox: quantum entropy is protected but difficult for researchers, AI systems, and external applications to access. Hardware data diodes enforce unidirectional data flow but cost $5,000–$50,000 and require specialized infrastructure [3], making them prohibitive for academic institutions.
+Commercial QRNG appliances such as ID Quantique's Quantis are frequently deployed on isolated internal networks due to security policies [6]. This creates an accessibility paradox: quantum entropy is protected but difficult for researchers, AI systems, and external applications to access. Hardware data diodes enforce unidirectional data flow but cost $5,000–$50,000 and require specialized infrastructure [7][8], making them prohibitive for academic institutions.
 
-Public QRNG services from ANU and NIST expose quantum entropy via Internet APIs [4][5] but impose rate limits, small response sizes, high latency (~450ms), and privacy concerns through centralized logging. The emerging field of AI-assisted research compounds these challenges: agents increasingly support scientific workflows but must access services through ad hoc HTTP clients rather than standardized tools, hindering systematic adoption of quantum entropy.
+Public QRNG services from ANU and NIST expose quantum entropy via Internet APIs [9][10] but impose rate limits, small response sizes, high latency (~450ms), and privacy concerns through centralized logging. The emerging field of AI-assisted research compounds these challenges: agents increasingly support scientific workflows [11] but must access services through ad hoc HTTP clients rather than standardized tools, hindering systematic adoption of quantum entropy.
 
 ### 1.2 Innovation and Contribution
 
-QRNG-DD introduces a software-based data diode architecture enabling secure quantum entropy distribution without hardware data diode costs. An Entropy Collector on the internal network fetches quantum data, signs and encapsulates it, and pushes to an Entropy Gateway on the external network. The Gateway never initiates reverse connections, emulating hardware data diode properties through software architecture [3].
+QRNG-DD introduces a software-based data diode architecture enabling secure quantum entropy distribution without hardware data diode costs. An Entropy Collector on the internal network fetches quantum data, signs and encapsulates it, and pushes to an Entropy Gateway on the external network. The Gateway never initiates reverse connections, emulating hardware data diode properties through software architecture [7].
 
-The Rust implementation benefits from compile-time memory safety guarantees preventing buffer overflows and data races [6], while zero-copy buffers and asynchronous I/O achieve high performance. Model Context Protocol integration exposes quantum randomness through standardized tools [7], and multi-source aggregation using XOR or HKDF mixing addresses vendor backdoor concerns through information-theoretic security guarantees [8].
+The Rust implementation benefits from compile-time memory safety guarantees preventing buffer overflows and data races [12][13], while zero-copy buffers and asynchronous I/O achieve high performance [14]. Model Context Protocol integration exposes quantum randomness through standardized tools [15], and multi-source aggregation using XOR or HKDF mixing addresses vendor backdoor concerns through information-theoretic security guarantees [16].
 
 ### 1.3 Target Research Domains
 
-QRNG-DD addresses infrastructure needs across quantum computing (state initialization, gate testing, error correction validation), machine learning (weight initialization, dropout, data augmentation), cryptographic research (key generation, nonce generation, backdoor-resistant protocols), and computational physics (Monte Carlo methods, random walks, statistical mechanics). The emerging paradigm of AI-assisted research, where autonomous agents design experiments and iterate hypotheses, requires standardized quantum entropy access through tools like MCP [1].
+QRNG-DD addresses infrastructure needs across quantum computing (state initialization, gate testing, error correction validation) [17][32], machine learning (weight initialization [18], dropout [19], data augmentation), cryptographic research (key generation, nonce generation, backdoor-resistant protocols), and computational physics (Monte Carlo methods [4][20], random walks, statistical mechanics). The emerging paradigm of AI-assisted research, where autonomous agents design experiments and iterate hypotheses, requires standardized quantum entropy access through tools like MCP [15].
 
 ### 1.4 Related Work and Research Gap
 
-Hardware data diodes from vendors like Owl Cyber Defense provide physical unidirectional guarantees through fiber-optic transmission [3], offering maximum security but requiring substantial investment. QRNG-DD trades physical guarantees for practical software isolation at significantly reduced cost, suitable for research and moderate-security deployments.
+Hardware data diodes from vendors like Owl Cyber Defense provide physical unidirectional guarantees through fiber-optic transmission [7], offering maximum security but requiring substantial investment. QRNG-DD trades physical guarantees for practical software isolation at significantly reduced cost, suitable for research and moderate-security deployments.
 
-Public QRNG services from ANU and NIST democratize access but impose limitations unsuitable for research-grade applications [4][5]: rate limits, small response sizes, high latency, and privacy concerns through centralized logging. QRNG-DD's self-hosted architecture eliminates these constraints while ensuring complete privacy.
+Public QRNG services from ANU and NIST democratize access but impose limitations unsuitable for research-grade applications [9][10]: rate limits, small response sizes, high latency, and privacy concerns through centralized logging. QRNG-DD's self-hosted architecture eliminates these constraints while ensuring complete privacy.
 
-Commercial QRNG appliances provide quantum hardware with basic APIs but lack data isolation, AI integration, and multi-source mixing [2]. Direct API implementations in C [13] enable embedded integration but introduce memory safety risks that affect approximately 70% of security vulnerabilities in major software projects [14][15]. QRNG-DD uses Rust where ownership rules enforce memory safety at compile-time, addressing distributed network infrastructure where security boundary enforcement justifies the language choice.
+Commercial QRNG appliances provide quantum hardware with basic APIs but lack data isolation, AI integration, and multi-source mixing [6]. Independent quality assessments confirm commercial QRNG appliances meet statistical requirements [33], yet direct API implementations in C [21] enable embedded integration but introduce memory safety risks that affect approximately 70% of security vulnerabilities in major software projects [22][23]. QRNG-DD uses Rust [35] where ownership rules enforce memory safety at compile-time [12], addressing distributed network infrastructure where security boundary enforcement justifies the language choice.
 
-Academic literature on software data diodes remains limited [9], leaving QRNG-DD as an open-source system uniquely combining software data diode emulation, quantum entropy distribution, and AI integration through the Model Context Protocol [7].
+Academic literature on software data diodes remains limited [24], leaving QRNG-DD as an open-source system uniquely combining software data diode emulation, quantum entropy distribution, and AI integration through the Model Context Protocol [15].
 
 ---
 
@@ -58,7 +58,7 @@ Academic literature on software data diodes remains limited [9], leaving QRNG-DD
 
 ### 2.1 Architecture Overview
 
-QRNG-DD implements a three-tier research infrastructure. The Entropy Collector operates on the internal network, fetching quantum entropy via HTTPS, signing packets with HMAC-SHA256, and pushing data outward. The Entropy Gateway on the external network verifies signatures, buffers entropy, and serves an authenticated REST API. The MCP server exposes quantum randomness to AI agents via JSON-RPC 2.0. The unidirectional data flow from Collector to Gateway with no reverse communication emulates hardware data diode properties through software architecture, enabling secure cross-boundary distribution for research environments.
+QRNG-DD implements a three-tier research infrastructure. The Entropy Collector operates on the internal network, fetching quantum entropy via HTTPS, signing packets with HMAC-SHA256 [25], and pushing data outward. The Entropy Gateway on the external network verifies signatures, buffers entropy, and serves an authenticated REST API [26]. The MCP server exposes quantum randomness to AI agents via JSON-RPC 2.0. The unidirectional data flow from Collector to Gateway with no reverse communication emulates hardware data diode properties through software architecture, enabling secure cross-boundary distribution for research environments.
 
 Configuration via environment variables, Docker containerization for reproducible deployment, and comprehensive observability through Prometheus metrics and structured logging facilitate research adoption and experimental reproducibility.
 
@@ -74,11 +74,11 @@ Four independent integrity layers ensure entropy authenticity: HMAC-SHA256 signa
 
 The MCP server exposes quantum randomness through six standardized JSON-RPC 2.0 tools organized into two functional categories. Four data generation tools provide random bytes with configurable encoding for cryptographic experiments, random integers within specified ranges for algorithm testing, random floats in the unit interval for Monte Carlo simulations, and quantum-seeded UUIDs for experimental tracking. Two utility tools complement these: a status endpoint for monitoring gateway health and buffer levels, and a Monte Carlo π estimation tool for immediate quality validation achieving sub-0.0002% error rates.
 
-Each tool returns structured JSON with source attribution marking entropy as quantum-derived, enabling AI agents to cite quantum sources in automated research reports and distinguish from pseudo-random baselines. This zero-configuration interface eliminates custom integration code, reducing AI agent quantum randomness access from hours of HTTP client development to conversational tool invocation [7].
+Each tool returns structured JSON with source attribution marking entropy as quantum-derived, enabling AI agents to cite quantum sources in automated research reports and distinguish from pseudo-random baselines. This zero-configuration interface eliminates custom integration code, reducing AI agent quantum randomness access from hours of HTTP client development to conversational tool invocation [15].
 
 ### 2.5 Multi-Source Entropy Aggregation
 
-Multi-source aggregation addresses vendor backdoor concerns and hardware failure risks. XOR combination provides information-theoretic security: if at least one source generates uniform random bits, the output inherits that uniformity [8]. HKDF-based mixing handles correlated sources through cryptographic extraction [10]. Automatic health monitoring implements fault isolation with configurable retry intervals, enabling heterogeneous QRNG arrays resilient to single-point failures.
+Multi-source aggregation addresses vendor backdoor concerns and hardware failure risks. XOR combination provides information-theoretic security: if at least one source generates uniform random bits, the output inherits that uniformity [16]. HKDF-based mixing handles correlated sources through cryptographic extraction [27]. Automatic health monitoring implements fault isolation with configurable retry intervals, enabling heterogeneous QRNG arrays resilient to single-point failures.
 
 ### 2.6 Research Infrastructure Features
 
@@ -98,11 +98,11 @@ AI-assisted research workflows benefit from standardized quantum entropy access.
 
 ### 3.3 Computational Physics and Monte Carlo Methods
 
-Monte Carlo simulations rely on vast quantities of unbiased entropy that QRNG-DD delivers efficiently. Random walk studies, statistical mechanics simulations, and Markov Chain Monte Carlo methods achieve their theoretical convergence properties only with sufficiently high-quality randomness. Built-in quality validation through Monte Carlo π estimation—achieving 0.0002% error with 10,000,000 iterations—demonstrates statistical quality suitable for research-grade simulations.
+Monte Carlo simulations rely on vast quantities of unbiased entropy that QRNG-DD delivers efficiently [4][20]. Poor-quality random number generators can introduce hidden errors in Monte Carlo results [31]. Random walk studies, statistical mechanics simulations, and Markov Chain Monte Carlo methods [28] achieve their theoretical convergence properties only with sufficiently high-quality randomness. Built-in quality validation through Monte Carlo π estimation—achieving 0.0002% error with 10,000,000 iterations—demonstrates statistical quality suitable for research-grade simulations.
 
 ### 3.4 Cryptographic Research
 
-Multi-source entropy aggregation makes QRNG-DD valuable for cryptographic studies requiring vendor-independent randomness. The XOR and HKDF mixing strategies demonstrate practical defense against vendor backdoors, providing reproducible infrastructure for security analysis. The standardized test infrastructure supports randomness quality comparisons using NIST SP 800-22 [11] and Dieharder [12] test suites.
+Multi-source entropy aggregation makes QRNG-DD valuable for cryptographic studies requiring vendor-independent randomness [5]. The XOR and HKDF mixing strategies demonstrate practical defense against vendor backdoors, providing reproducible infrastructure for security analysis. The standardized test infrastructure supports randomness quality comparisons using NIST SP 800-22 [29] and Dieharder [30] test suites.
 
 ### 3.5 Example Implementations
 
@@ -118,7 +118,7 @@ QRNG-DD provides cost-effective quantum entropy infrastructure through MIT-licen
 
 **Table 1: Comparison with Related Quantum Entropy Access Solutions**
 
-| Feature | Public QRNG (ANU) | libqrng [13] | QRNG-DD |
+| Feature | Public QRNG (ANU) | libqrng [21] | QRNG-DD |
 |---------|-------------------|--------------|---------|
 | **Network Access** | Internet required | Local network | Cross-boundary |
 | **Rate Limits** | 5 req/sec | Appliance limit | Appliance limit |
@@ -154,7 +154,7 @@ Monte Carlo π estimation with 10,000,000 iterations achieves 0.0002% error, con
 
 ## 5. Extensibility for Research
 
-The modular architecture supports research extensions: custom entropy sources integrate via trait implementations for additional QRNG vendors, custom mixing strategies implement specialized aggregation algorithms, and pluggable test suites extend validation beyond Monte Carlo π to NIST SP 800-22 [11] or Dieharder [12]. The shared core library provides reusable Rust components applicable to broader research software development.
+The modular architecture supports research extensions: custom entropy sources integrate via trait implementations for additional QRNG vendors, custom mixing strategies implement specialized aggregation algorithms, and pluggable test suites extend validation beyond Monte Carlo π to NIST SP 800-22 [29] or Dieharder [30]. The shared core library provides reusable Rust components applicable to broader research software development.
 
 ---
 
@@ -180,33 +180,73 @@ The author gratefully acknowledges Politehnica University of Timisoara for provi
 
 [1] M. Herrero-Collantes and J. C. Garcia-Escartin, "Quantum random number generators," Reviews of Modern Physics, vol. 89, no. 1, article 015004, 2017. doi: 10.1103/RevModPhys.89.015004
 
-[2] ID Quantique, "Quantis QRNG Appliance," 2024. [Online]. Available: https://www.idquantique.com/random-number-generation/products/quantis-rng-appliance/. [Accessed: 03-Oct-2025].
+[2] M. Stipčević and Ç. K. Koç, "True random number generators," in Open Problems in Mathematics and Computational Science, Springer, 2014, pp. 275-315. doi: 10.1007/978-3-319-10683-0_12
 
-[3] Owl Cyber Defense, "Data Diode Technology," 2024. [Online]. Available: https://owlcyberdefense.com/resource/data-diode-security-solutions/. [Accessed: 21-Oct-2025].
+[3] B. Schneier, Applied Cryptography: Protocols, Algorithms, and Source Code in C, 2nd ed. New York: John Wiley & Sons, 1996. doi: 10.1002/9781119183471
 
-[4] Australian National University, "ANU QRNG API," 2024. [Online]. Available: https://qrng.anu.edu.au/. [Accessed: 28-Oct-2025].
+[4] R. Y. Rubinstein and D. P. Kroese, Simulation and the Monte Carlo Method, 3rd ed. Hoboken, NJ: John Wiley & Sons, 2016. doi: 10.1002/9781118631980
 
-[5] National Institute of Standards and Technology, "NIST Randomness Beacon," 2024. [Online]. Available: https://beacon.nist.gov/. [Accessed: 28-Oct-2025].
+[5] D. Eastlake, J. Schiller, and S. Crocker, "Randomness Requirements for Security," RFC 4086, Internet Engineering Task Force, Jun. 2005. [Online]. Available: https://datatracker.ietf.org/doc/html/rfc4086 [Accessed: 10-Dec-2024].
 
-[6] R. Jung, J.-H. Jourdan, R. Krebbers, and D. Dreyer, "RustBelt: Securing the Foundations of the Rust Programming Language," Proceedings of the ACM on Programming Languages, vol. 2, no. POPL, article 66, pp. 1-34, 2018. doi: 10.1145/3158154
+[6] ID Quantique, "Quantis QRNG Appliance," 2024. [Online]. Available: https://www.idquantique.com/random-number-generation/products/quantis-rng-appliance/. [Accessed: 03-Oct-2025].
 
-[7] Anthropic, "Model Context Protocol Specification," 2024. [Online]. Available: https://modelcontextprotocol.io/docs/getting-started/intro. [Accessed: 07-Dec-2024].
+[7] Owl Cyber Defense, "Data Diode Technology," 2024. [Online]. Available: https://owlcyberdefense.com/resource/data-diode-security-solutions/. [Accessed: 21-Oct-2025].
 
-[8] C. H. Bennett, G. Brassard, and J.-M. Robert, "Privacy amplification by public discussion," SIAM Journal on Computing, vol. 17, no. 2, pp. 210-229, 1988. doi: 10.1137/0217014
+[8] K. Stouffer, V. Pillitteri, S. Lightman, M. Abrams, and A. Hahn, "Guide to Industrial Control Systems (ICS) Security," NIST Special Publication 800-82 Rev. 2, National Institute of Standards and Technology, May 2015. doi: 10.6028/NIST.SP.800-82r2
 
-[9] A. Ginter, "Unidirectional Security Gateways: Stronger Than Firewalls," in Proc. 14th Int. Conf. Accelerator and Large Experimental Physics Control Systems (ICALEPCS'13), San Francisco, CA, USA, Oct. 2013, paper THCOBA02. [Online]. Available: https://proceedings.jacow.org/ICALEPCS2013/papers/thcoba02.pdf [Accessed: 19-Nov-2025].
+[9] Australian National University, "ANU QRNG API," 2024. [Online]. Available: https://qrng.anu.edu.au/. [Accessed: 28-Oct-2025].
 
-[10] H. Krawczyk and P. Eronen, "HMAC-based Extract-and-Expand Key Derivation Function (HKDF)," RFC 5869, Internet Engineering Task Force, May 2010. [Online]. Available: https://datatracker.ietf.org/doc/html/rfc5869 [Accessed: 10-Oct-2025].
+[10] National Institute of Standards and Technology, "NIST Randomness Beacon," 2024. [Online]. Available: https://beacon.nist.gov/. [Accessed: 28-Oct-2025].
 
-[11] A. Rukhin et al., "A Statistical Test Suite for Random and Pseudorandom Number Generators for Cryptographic Applications," NIST Special Publication 800-22 Rev. 1a, National Institute of Standards and Technology, Apr. 2010. [Online]. Available: https://nvlpubs.nist.gov/nistpubs/Legacy/SP/nistspecialpublication800-22r1a.pdf [Accessed: 10-Oct-2025].
+[11] L. Wang, C. Ma, X. Feng, Z. Zhang, H. Yang, J. Zhang, et al., "A Survey on Large Language Model based Autonomous Agents," Frontiers of Computer Science, vol. 18, no. 6, article 186345, 2024. doi: 10.1007/s11704-024-40231-1
 
-[12] R. G. Brown, "Dieharder: A Random Number Test Suite," 2024. [Online]. Available: https://webhome.phy.duke.edu/~rgb/General/dieharder.php. [Accessed: 25-Oct-2025].
+[12] R. Jung, J.-H. Jourdan, R. Krebbers, and D. Dreyer, "RustBelt: Securing the Foundations of the Rust Programming Language," Proceedings of the ACM on Programming Languages, vol. 2, no. POPL, article 66, pp. 1-34, 2018. doi: 10.1145/3158154
 
-[13] S. M. Ardelean, M. Udrescu, and V. Stangaciu, "Easy to integrate API for accessing true random numbers generated with IDQ's Quantis Appliance," SoftwareX, vol. 27, article 101841, 2024. doi: 10.1016/j.softx.2024.101841
+[13] N. D. Matsakis and F. S. Klock II, "The Rust Language," ACM SIGAda Ada Letters, vol. 34, no. 3, pp. 103-104, 2014. doi: 10.1145/2692956.2663188
 
-[14] M. Miller, "Trends, challenges, and strategic shifts in the software vulnerability mitigation landscape," Microsoft Security Response Center, Feb. 2019. [Online]. Available: https://github.com/microsoft/MSRC-Security-Research/blob/master/presentations/2019_02_BlueHatIL/2019_01%20-%20BlueHatIL%20-%20Trends%2C%20challenge%2C%20and%20shifts%20in%20software%20vulnerability%20mitigation.pdf [Accessed: 19-Nov-2025].
+[14] Tokio Contributors, "Tokio: An asynchronous runtime for the Rust programming language," 2024. [Online]. Available: https://tokio.rs/. [Accessed: 15-Nov-2025].
 
-[15] "Memory safety," The Chromium Projects, 2024. [Online]. Available: https://www.chromium.org/Home/chromium-security/memory-safety/ [Accessed: 19-Nov-2025].
+[15] Anthropic, "Model Context Protocol Specification," 2024. [Online]. Available: https://modelcontextprotocol.io/. [Accessed: 07-Dec-2024].
+
+[16] C. H. Bennett, G. Brassard, and J.-M. Robert, "Privacy amplification by public discussion," SIAM Journal on Computing, vol. 17, no. 2, pp. 210-229, 1988. doi: 10.1137/0217014
+
+[17] M. A. Nielsen and I. L. Chuang, Quantum Computation and Quantum Information, 10th Anniversary ed. Cambridge: Cambridge University Press, 2010. doi: 10.1017/CBO9780511976667
+
+[18] X. Glorot and Y. Bengio, "Understanding the difficulty of training deep feedforward neural networks," in Proc. 13th Int. Conf. Artificial Intelligence and Statistics (AISTATS), Sardinia, Italy, 2010, pp. 249-256.
+
+[19] N. Srivastava, G. Hinton, A. Krizhevsky, I. Sutskever, and R. Salakhutdinov, "Dropout: A Simple Way to Prevent Neural Networks from Overfitting," Journal of Machine Learning Research, vol. 15, no. 1, pp. 1929-1958, 2014.
+
+[20] N. Metropolis and S. Ulam, "The Monte Carlo Method," Journal of the American Statistical Association, vol. 44, no. 247, pp. 335-341, 1949. doi: 10.1080/01621459.1949.10483310
+
+[21] S. M. Ardelean, M. Udrescu, and V. Stangaciu, "Easy to integrate API for accessing true random numbers generated with IDQ's Quantis Appliance," SoftwareX, vol. 27, article 101841, 2024. doi: 10.1016/j.softx.2024.101841
+
+[22] M. Miller, "Trends, challenges, and strategic shifts in the software vulnerability mitigation landscape," Microsoft Security Response Center, Feb. 2019. [Online]. Available: https://github.com/microsoft/MSRC-Security-Research/blob/master/presentations/2019_02_BlueHatIL/ [Accessed: 19-Nov-2025].
+
+[23] "Memory safety," The Chromium Projects, 2024. [Online]. Available: https://www.chromium.org/Home/chromium-security/memory-safety/ [Accessed: 19-Nov-2025].
+
+[24] A. Ginter, "Unidirectional Security Gateways: Stronger Than Firewalls," in Proc. 14th Int. Conf. Accelerator and Large Experimental Physics Control Systems (ICALEPCS'13), San Francisco, CA, USA, Oct. 2013, paper THCOBA02. [Online]. Available: https://proceedings.jacow.org/ICALEPCS2013/papers/thcoba02.pdf [Accessed: 19-Nov-2025].
+
+[25] H. Krawczyk, M. Bellare, and R. Canetti, "HMAC: Keyed-Hashing for Message Authentication," RFC 2104, Internet Engineering Task Force, Feb. 1997. [Online]. Available: https://datatracker.ietf.org/doc/html/rfc2104 [Accessed: 10-Oct-2025].
+
+[26] R. T. Fielding, "Architectural Styles and the Design of Network-based Software Architectures," Ph.D. dissertation, University of California, Irvine, 2000.
+
+[27] H. Krawczyk and P. Eronen, "HMAC-based Extract-and-Expand Key Derivation Function (HKDF)," RFC 5869, Internet Engineering Task Force, May 2010. [Online]. Available: https://datatracker.ietf.org/doc/html/rfc5869 [Accessed: 10-Oct-2025].
+
+[28] W. K. Hastings, "Monte Carlo Sampling Methods Using Markov Chains and Their Applications," Biometrika, vol. 57, no. 1, pp. 97-109, 1970. doi: 10.1093/biomet/57.1.97
+
+[29] A. Rukhin et al., "A Statistical Test Suite for Random and Pseudorandom Number Generators for Cryptographic Applications," NIST Special Publication 800-22 Rev. 1a, National Institute of Standards and Technology, Apr. 2010. [Online]. Available: https://nvlpubs.nist.gov/nistpubs/Legacy/SP/nistspecialpublication800-22r1a.pdf [Accessed: 10-Oct-2025].
+
+[30] R. G. Brown, "Dieharder: A Random Number Test Suite," 2024. [Online]. Available: https://webhome.phy.duke.edu/~rgb/General/dieharder.php. [Accessed: 25-Oct-2025].
+
+[31] A. M. Ferrenberg, D. P. Landau, and Y. J. Wong, "Monte Carlo Simulations: Hidden Errors from 'Good' Random Number Generators," Physical Review Letters, vol. 69, no. 23, pp. 3382-3384, 1992. doi: 10.1103/PhysRevLett.69.3382
+
+[32] J. Preskill, "Quantum Computing in the NISQ era and beyond," Quantum, vol. 2, p. 79, 2018. doi: 10.22331/q-2018-08-06-79
+
+[33] M. Petrov, I. Radchenko, D. Steiger, R. Renner, M. Troyer, and V. Makarov, "Independent quality assessment of a commercial quantum random number generator," EPJ Quantum Technology, vol. 9, no. 1, article 17, 2022. doi: 10.1140/epjqt/s40507-022-00136-z
+
+[34] X. Ma, X. Yuan, Z. Cao, B. Qi, and Z. Zhang, "Quantum random number generation," npj Quantum Information, vol. 2, article 16021, 2016. doi: 10.1038/npjqi.2016.21
+
+[35] S. Klabnik and C. Nichols, The Rust Programming Language, 2nd ed. San Francisco: No Starch Press, 2023.
 
 ---
 
