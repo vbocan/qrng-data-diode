@@ -69,10 +69,12 @@ Configure LM Studio to use the QRNG MCP server:
 4. The QRNG tools will be available to your LLM
 
 Supported MCP tools:
-- `get_random_bytes`: Get raw quantum random bytes
-- `get_random_integers`: Generate random integers in range
-- `get_random_hex`: Get hex-encoded random data
-- `get_random_base64`: Get base64-encoded random data
+- `get_random_bytes`: Get raw quantum random bytes (hex or base64 encoded)
+- `get_random_integers`: Generate random integers in specified range
+- `get_random_floats`: Generate random floats in range [0, 1)
+- `get_random_uuid`: Generate quantum-seeded UUID v4
+- `get_status`: Query gateway health and buffer status
+- `get_data_quality`: Test randomness quality via Monte Carlo π estimation
 
 ## Quick Start with Docker (Self-Hosted)
 
@@ -162,7 +164,7 @@ cargo test -p qrng-mcp
 - **Burst Capability**: 400+ req/s (short-term peak performance)
 - **Latency**: P50 = 3.62ms, P95 = 6.89ms, P99 = 9.13ms
 - **Reliability**: 100% success rate over 10-minute sustained test
-- **Quality**: Monte Carlo π error <0.0002% (10M iterations)
+- **Quality**: Built-in Monte Carlo π estimation demonstrates statistical quality suitable for research
 - **Comparison**: 6-124x faster latency than ANU QRNG, NIST Beacon
 - **Scaling**: Linear throughput scaling with multiple QRNG appliances
 
@@ -171,8 +173,8 @@ See [Performance Benchmarks](docs/BENCHMARK.md) for detailed methodology, result
 ## Technology Stack
 
 - **Language**: Rust 1.75+
-- **Async Runtime**: Tokio 1.35
-- **HTTP Server**: Axum 0.7
+- **Async Runtime**: Tokio 1.48
+- **HTTP Server**: Axum 0.8
 - **Cryptography**: HMAC-SHA256, CRC32
 - **Metrics**: Prometheus
 - **Logging**: Structured JSON with tracing
@@ -183,10 +185,10 @@ See [Performance Benchmarks](docs/BENCHMARK.md) for detailed methodology, result
 If you use QRNG-DD in your research, please cite:
 
 ```bibtex
-@software{qrngdd2025,
-  title = {QRNG-DD: A High-Performance Rust Implementation of Software-Based Data Diode Architecture for Quantum Random Number Distribution with AI Agent Integration},
-  author = {Valer Bocan, PhD, CSSLP},
-  year = {2025},
+@software{qrngdd2026,
+  title = {QRNG-DD: Software Data Diode for Quantum Random Number Distribution with AI Agent Integration},
+  author = {Bocan, Valer},
+  year = {2026},
   version = {1.0.0},
   url = {https://github.com/vbocan/qrng-data-diode},
   license = {MIT}
