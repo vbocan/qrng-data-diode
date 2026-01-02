@@ -6,7 +6,7 @@ authors:
     orcid: "https://orcid.org/0009-0006-9084-4064"
     affiliation: "Department of Computer and Information Technology, Politehnica University of Timisoara"
     email: "valer.bocan@upt.ro"
-title: "QRNG-DD: A High-Performance Rust Implementation of Software-Based Data Diode Architecture for Quantum Random Number Distribution with AI Agent Integration"
+title: "QRNG-DD: Software Data Diode for Quantum Random Number Distribution with AI Agent Integration"
 version: 1.0.0
 date-released: 2025-01-15
 url: "https://github.com/vbocan/qrng-data-diode"
@@ -29,8 +29,8 @@ abstract: >
   QRNG-DD is a high-performance, secure bridge service that exposes
   Quantum Random Number Generator (QRNG) entropy to external networks
   using software-based data diode emulation. Implemented in Rust for
-  maximum safety, performance, and reliability, it provides the first
-  integration of quantum randomness with AI agents through the Model
-  Context Protocol. The system achieves ~100 requests/second throughput
-  with <10ms p50 latency while maintaining strict unidirectional data
-  flow and cryptographic integrity guarantees.
+  memory safety and reliability, it provides the first integration of
+  quantum randomness with AI agents through the Model Context Protocol.
+  The system achieves sub-4ms median latency with throughput limited
+  only by QRNG hardware (~29 req/s per appliance), while maintaining
+  strict unidirectional data flow and cryptographic integrity guarantees.
