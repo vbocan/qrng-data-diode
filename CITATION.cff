@@ -8,7 +8,7 @@ authors:
     email: "valer.bocan@upt.ro"
 title: "QRNG-DD: Software Data Diode for Quantum Random Number Distribution with AI Agent Integration"
 version: 1.0.0
-date-released: 2025-01-15
+date-released: 2026-01-04
 url: "https://github.com/vbocan/qrng-data-diode"
 repository-code: "https://github.com/vbocan/qrng-data-diode"
 license: MIT
